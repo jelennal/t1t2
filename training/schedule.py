@@ -14,19 +14,19 @@ def lr_schedule(fun, var, halfLife, start):
     
 
     def Trapz(t):
-        t1 = 1./2 # grows
-        t2 = 1./4 # 1
-        t3 = 1.-(t1+t2) # falls
+        t1 = 1./2 
+        t2 = 1./4 
+        t3 = 1.-(t1+t2) 
 
         if t < t1:return t/t1
         elif t < (t2+t1): return 1.
         else: return (1. - (t-(1.-t3)) / t3)
 
     def ZeroTrapz(t):
-        t1 = 1./8 # zero
-        t2 = 3./8 # grows
-        t3 = 1./4 # 1
-        t4 = 1.-(t3+t2+t1) # falls
+        t1 = 1./8 
+        t2 = 3./8 
+        t3 = 1./4 
+        t4 = 1.-(t3+t2+t1) 
 
         if t < t1: return 0.
         elif t < (t2+t1): return (t-t1)/t2
@@ -34,9 +34,9 @@ def lr_schedule(fun, var, halfLife, start):
         else: return (1. - (t-(1.-t4)) / t4)
 
     def HardZeroOneZero(t):
-        t1 = 1./6 # grows
-        t2 = 2./3 # 1
-#        t3 = 1.-(t1+t2) # falls
+        t1 = 1./6 
+        t2 = 2./3 
+
         if t < t1: return 0.
         elif t < (t2+t1): return 1.
         else: return 0.
