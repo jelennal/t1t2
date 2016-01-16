@@ -56,28 +56,28 @@ class convnet(object):
         for layer in params.convLayers:            
 
             # construct layer
-            print layer.type, layer.filter, layer.maps, ' filters'  
+            print 'layer ', str(i), ':', layer.type, layer.filter, layer.maps, ' filters'  
             if layer.type == 'conv':
                 h.append(conv_layer(rng=rng, rstream=rstream, index=i, splitPoint=splitPoint, input=input,
-                     params=params, globalParams=globalParams, graph=graph,
-                     filterShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(1,1)))                
+                                    params=params, globalParams=globalParams, graph=graph,
+                                    filterShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(1,1)))                
             elif layer.type == 'pool':
                 h.append(pool_layer(rstream=rstream, input=input, params=params, index=i, splitPoint=splitPoint, graph=graph,                      
-                         poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(2,2)))
+                                    poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(2,2)))
             elif layer.type in ['average', 'average+softmax']:
                 h.append(average_layer(input=input, params=params, index=i, splitPoint=splitPoint, graph=graph,
-                         poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(6,6)))
+                                       poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(6,6)))
             elif layer.type == 'softmax':
                 h.append(mlp_layer(rng=rng, rstream=rstream, index=i, splitPoint=splitPoint, input=input,
-                     paramsL=params, globalParams=globalParams, graph=graph))
+                                   params=params, globalParams=globalParams, graph=graph))
 
 
             # collect penalty term
-            if layer.type in ['conv', 'softmax'] and 'L2' in params.rglrz:                               
+            if layer.type in ['conv', 'softmax'] and ('L2' in params.rglrz):                               
                 if 'L2' in params.rglrzPerMap:                
-                    tempW = h[i].rglrzParam['L2'].dimshuffle(0, 'x', 'x', 'x') * T.sqr(h[i].W)
+                    tempW = h[-1].rglrzParam['L2'].dimshuffle(0, 'x', 'x', 'x') * T.sqr(h[-1].W)
                 else:     
-                    tempW = h[i].rglrzParam['L2'] * T.sqr(h[i].W)
+                    tempW = h[-1].rglrzParam['L2'] * T.sqr(h[-1].W)
                 penalty += T.sum(tempW) 
 
 
@@ -91,18 +91,18 @@ class convnet(object):
             if layer.type in ['conv', 'softmax']:                            
                 for param in params.rglrz: 
                     if (param == 'inputNoise' and i == 0) or (param != 'inputNoise'):
-                        trackT2Params[param] += [h[i].rglrzParam[param]]
+                        trackT2Params[param] += [h[-1].rglrzParam[param]]
                 if params.useT2:
                     paramsT2 += h[i].paramsT2
             elif layer.type == 'pool' and layer.noise and 'addNoise' in params.rglrz:
-                trackT2Params['addNoise'] += [h[i].noizParam]
+                trackT2Params['addNoise'] += [h[-1].noizParam]
                 if params.useT2 and 'addNoise' in params.rglrzTrain:
                     paramsT2 += h[i].paramsT2
             
             # collect BN params&updates
             if params.batchNorm and params.convLayers[i].bn:
-                paramsBN += h[i].paramsBN
-                updateBN += h[i].updateBN                
+                paramsBN += h[-1].paramsBN
+                updateBN += h[-1].updateBN                
 
             
             input = h[-1].output
@@ -123,6 +123,7 @@ class convnet(object):
         self.hStat = input
         self.trackT2Params = trackT2Params
         print len(trackT2Params[param]) 
+        print '# t1 params: ', len(paramsT1), '# t2 params: ', len(paramsT2) 
 
         # output and predicted labels
         self.h = h

@@ -60,7 +60,7 @@ class mlp(object):
             
             h.append(mlp_layer(rng=rng, rstream=rstream, index=i,
                                  splitPoint=splitPoint, input=input,
-                                 paramsL=params, globalParams=globalParams, graph=graph))
+                                 params=params, globalParams=globalParams, graph=graph))
 
             # collect penalty terms
             if 'L2' in params.rglrz:
