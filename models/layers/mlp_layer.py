@@ -29,16 +29,16 @@ class mlp_layer(object):
                  W=None, b=None, a=None, rglrzParam=None, normParam=None, normWindow=None):                          # looper be share by the network  
 
         ''' Class defining a fully connected layer.
-                
-        # Arguments:
-                        
+                                        
         '''
-        nIn = params.nHidden[index-1]
-        nOut = params.nHidden[index]
-        if params.model == 'convnet':
+        if params.model == 'convnet':            
             nonLin = 'softmax'
+            nIn = 10
+            nOut = 10
         else:
             nonLin = params.activation[index]
+            nIn = params.nHidden[index-1]
+            nOut = params.nHidden[index]
             
 
         # defining shared T1 params

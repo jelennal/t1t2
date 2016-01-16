@@ -10,6 +10,35 @@ def weightMultiplier(nIn, nOut, key):
     return weightMultiplier                
 
 
+def t1_shared(params, rng, index, nIn, nOut, outFilters, filterShape=0, defineW=1):
+    
+    if defineW:    
+        if params.model == 'convnet':
+            if params.convLayers[index].type == 'softmax':
+                tempW = np.asarray(rng.randn(nIn, nOut),dtype=theano.config.floatX)
+            else:    
+                tempW = np.asarray(rng.randn(*filterShape),dtype=theano.config.floatX)
+            if params.convLayers[index].type == 'softmax' or params.convLayers[index+1].type == 'average+softmax': #and not params.batchNorm: 
+                tempW *= 1e-5
+            else: 
+                tempW *= weightMultiplier(nIn, nOut, convNonLin)
+        else:
+            tempW = np.asarray(rng.randn(nIn, nOut),dtype=theano.config.floatX)
+            tempW *= weightMultiplier(nIn, nOut, params.activation[index])
+    else:
+        tempW = 0.        
+
+    W = theano.shared(value=tempW, name='W_%d' % index, borrow=True)
+
+    tempB = np.zeros((outFilters,), dtype=theano.config.floatX)  #np.asarray(rng.uniform(low=-1.0, high=1.0, size=(nOut,)), dtype=theano.config.floatX)
+    b = theano.shared(value=tempB, name='b_%d' % index, borrow=True)
+
+    tempA = np.ones((outFilters,), dtype=theano.config.floatX)  #np.asarray(rng.uniform(low=-1.0, high=1.0, size=(nOut,)), dtype=theano.config.floatX)
+    a = theano.shared(value=tempA, name='a_%d' % index, borrow=True)
+
+    return W, b, a
+
+
 def t2_shared(params, globalParams, index, inFilters, outFilters, filterShape):
     rglrzParam = {}
     for rglrz in params.rglrz:
@@ -46,27 +75,3 @@ def t2_shared(params, globalParams, index, inFilters, outFilters, filterShape):
     return rglrzParam        
 
     
-def t1_shared(params, rng, index, nIn, nOut, outFilters, filterShape=0, defineW=1):
-    
-    if defineW:
-        if params.model == 'convnet':
-            tempW = np.asarray(rng.randn(*filterShape),dtype=theano.config.floatX)
-            if params.convLayers[index+1].type == 'average+softmax' or params.convLayers[index].type == 'softmax': #and not params.batchNorm: 
-                tempW *= 1e-5
-            else: 
-                tempW *= weightMultiplier(nIn, nOut, convNonLin)
-        else:
-            tempW = np.asarray(rng.randn(nIn, nOut),dtype=theano.config.floatX)
-            tempW *= weightMultiplier(nIn, nOut, params.activation[index])
-    else:
-        tempW = 0.        
-
-    W = theano.shared(value=tempW, name='W_%d' % index, borrow=True)
-
-    tempB = np.zeros((outFilters,), dtype=theano.config.floatX)  #np.asarray(rng.uniform(low=-1.0, high=1.0, size=(nOut,)), dtype=theano.config.floatX)
-    b = theano.shared(value=tempB, name='b_%d' % index, borrow=True)
-
-    tempA = np.ones((outFilters,), dtype=theano.config.floatX)  #np.asarray(rng.uniform(low=-1.0, high=1.0, size=(nOut,)), dtype=theano.config.floatX)
-    a = theano.shared(value=tempA, name='a_%d' % index, borrow=True)
-
-    return W, b, a

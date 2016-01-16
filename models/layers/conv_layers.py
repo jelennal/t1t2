@@ -10,8 +10,6 @@ from models.layers.shared import t1_shared, t2_shared
 from models.layers.noise import noise_conditions, noiseup, dropout
 from models.layers.batchnorm import bn_shared, bn_layer
 
-relu = lambda x: T.maximum(0, x)
-identity = lambda x: x
 eps = 1e-8
 zero = np.float32(0.)
 one = np.float32(1.)
@@ -24,6 +22,7 @@ def softmax(x):
     
 def activation(input, key):
     relu = lambda x: T.maximum(0, x)    
+    identity = lambda x: x
     activFun = {'lin': identity, 'tanh': T.tanh, 'relu': relu, 
                 'sig': T.nnet.sigmoid, 'softmax': softmax}[key]
     return activFun(input)   
@@ -54,7 +53,9 @@ class conv_layer(object):
                 
         # defining shared T1 params
         if W is None:
-            W, b, a = t1_shared(params, rng, index, nIn, nOut, outFilters, filterShape) 
+            W, b, a = t1_shared(params=params, rng=rng, index=index, nIn=nIn, nOut=nOut, 
+                                outFilters=outFilters, filterShape=filterShape) 
+
         self.W = W; self.b = b; self.a = a    
         if params.batchNorm and not params.aFix:
             self.paramsT1 = [W, b, a]
@@ -90,28 +91,28 @@ class conv_layer(object):
             Input transformations: convolution, BN, noise, nonlinearity  
         '''
 
-        # add gauss noise after nonlinearity                  
-        self.input = input
+        # add gauss noise before affine transform                 
         if noise_conditions(params, index, 'type0'):
             input = noiseup(input, splitPoint, noiz, params.noiseT1, params, index, rstream)
 
 
         # convolution
-        self.convOut = nnconv.conv2d(input, self.W, subsample = stride, border_mode = 'valid')
+        convOut = nnconv.conv2d(input, self.W, subsample = stride, 
+                                     border_mode = params.convLayers[index].border)
 #                                     image_shape=self.input.shape, filter_shape = filterShape,                                     
 
         # batch normalization & scale+shift   
         if params.batchNorm and params.convLayers[index].bn:
-            self.convOut, updateBN = bn_layer(self.convOut, self.a, self.b, self.normParam, params, splitPoint, graph)
+            convOut, updateBN = bn_layer(convOut, self.a, self.b, self.normParam, params, splitPoint, graph)
             self.updateBN = updateBN 
         else:
-            self.convOut += self.b.dimshuffle('x', 0, 'x', 'x') 
+            convOut += self.b.dimshuffle('x', 0, 'x', 'x') 
 
         # add gauss noise before nonlinearity         
         if noise_conditions(params, index, 'type1'): 
-            self.convOut = noiseup(self.convOut, splitPoint, noiz, params.noiseT1, params, index, rstream)        
+            convOut = noiseup(convOut, splitPoint, noiz, params.noiseT1, params, index, rstream)        
         # nonlinearity
-        self.output = activation(self.convOut, convNonLin)
+        self.output = activation(convOut, convNonLin)
      
                               
 class pool_layer(object):
@@ -123,13 +124,14 @@ class pool_layer(object):
             Pooling layer + BN + noise 
         '''        
         #  pooling          
-        self.input = input
         self.output = downsample.max_pool_2d(input, ds = poolShape, st = stride, 
                                             ignore_border = ignore_border, mode = 'max')                                                                                                
-        # if batch normalization
+        # batch normalization
         if params.batchNorm and params.convLayers[index].bn:    
             
-            _, b, a = t1_shared(params, 0, index, 0, 0, outFilters, 0, 0) 
+            _, b, a = t1_shared(params=params, rng=0, index=index, nIn=0, nOut=0, 
+                                outFilters=outFilters, filterShape=0, defineW=0) 
+
             self.b = b; self.a = a     
             if params.batchNorm and not params.aFix:
                 self.paramsT1 = [b, a]
@@ -163,19 +165,16 @@ class average_layer(object):
             Averaging layer + BN + noise 
         '''        
         # averaging
-        self.input = input
         self.output = downsample.max_pool_2d(input, ds = poolShape, st = stride, 
                                              ignore_border = ignore_border, mode = 'average_exc_pad')
 
         # if batch normalization                                             
         if params.batchNorm and params.convLayers[index].bn:
             
-            _, b, a = t1_shared(params, 0, index, 0, 0, outFilters, 0, 0) 
+            _, b, a = t1_shared(params=params, rng=0, index=index, nIn=0, nOut=0, 
+                                outFilters=outFilters, filterShape=0, defineW=0) 
             self.b = b; self.a = a    
-            if params.batchNorm and not params.aFix:
-                self.paramsT1 = [b, a]
-            else:    
-                self.paramsT1 = [b]
+            self.paramsT1 = [b]
                         
             if normParam is None: 
                 normParam = bn_shared(params, outFilters, index)                                                  

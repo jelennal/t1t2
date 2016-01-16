@@ -35,37 +35,43 @@ def bn_layer(input, a, b, normParam, params, splitPoint, graph):
     '''
     minAlpha = params.movingAvMin
     iterStep = params.movingAvStep      
-
-    alpha = ifelse(T.ge(graph, 2), one, T.maximum(minAlpha, 1./normParam['iter'])) # cause includes 2 and 3           
+    alpha = ifelse(T.ge(graph, 2), one, T.maximum(minAlpha, 1./normParam['iter']))           
     alpha = ifelse(T.eq(graph, 1), zero, alpha)            
         
+    # compute mean & variance    
     if params.model == 'convnet':
         mean1 = ifelse(T.le(splitPoint, 1), normParam['mean'], T.mean(input[:splitPoint], axis = (0, 2, 3) ))
         var1 = ifelse(T.le(splitPoint, 1), normParam['var'], T.var(input[:splitPoint], axis = (0, 2, 3) ))
     else:
         mean1 = ifelse(T.le(splitPoint, 1), normParam['mean'], T.mean(input[:splitPoint], axis = 0 ))
         var1 = ifelse(T.le(splitPoint, 1), normParam['var'], T.var(input[:splitPoint], axis = 0 ))
-
         
-    # moving average
-    mean2 = (1-alpha)*normParam['mean'] + alpha*mean1 
-    var2 = (1-alpha)*normParam['var'] + alpha*var1   
-
     # if T1 evaluated on the estimate, but its own average is saved            
     mean1 = ifelse(T.eq(graph, 3), normParam['mean'], mean1)
     var1 = ifelse(T.eq(graph, 3), normParam['var'], var1)         
-    std1 = T.sqrt(var1 + eps); std2 = T.sqrt(var2 + eps)            
-    
-    # apply transformation
+
+    # moving average as a proxi for validation model 
+    mean2 = (1-alpha)*normParam['mean'] + alpha*mean1 
+    var2 = (1-alpha)*normParam['var'] + alpha*var1   
+
+    # apply transformation: 
+    # on the side of T1 stream, use T1 stats; on the side of T2 stream, use running average of T1 stats
+    std1 = T.sqrt(var1 + eps); std2 = T.sqrt(var2 + eps)                
     if params.model == 'convnet':
-        input = T.set_subtensor(input[:splitPoint], bn.batch_normalization(input[:splitPoint], a.dimshuffle('x', 0, 'x', 'x'), b.dimshuffle('x', 0, 'x', 'x'), mean1.dimshuffle('x', 0, 'x', 'x'), std1.dimshuffle('x', 0, 'x', 'x'))) 
-        input = T.set_subtensor(input[splitPoint:], bn.batch_normalization(input[splitPoint:], a.dimshuffle('x', 0, 'x', 'x'), b.dimshuffle('x', 0, 'x', 'x'), mean2.dimshuffle('x', 0, 'x', 'x'), std2.dimshuffle('x', 0, 'x', 'x')))                    
+        input = T.set_subtensor(input[:splitPoint], bn.batch_normalization(input[:splitPoint], 
+                                a.dimshuffle('x', 0, 'x', 'x'), b.dimshuffle('x', 0, 'x', 'x'), 
+                                mean1.dimshuffle('x', 0, 'x', 'x'), std1.dimshuffle('x', 0, 'x', 'x'), 
+                                mode='low_mem')) 
+        input = T.set_subtensor(input[splitPoint:], bn.batch_normalization(input[splitPoint:], 
+                                a.dimshuffle('x', 0, 'x', 'x'), b.dimshuffle('x', 0, 'x', 'x'), 
+                                mean2.dimshuffle('x', 0, 'x', 'x'), std2.dimshuffle('x', 0, 'x', 'x'),                    
+                                mode='low_mem'))                             
     else:    
         input = T.set_subtensor(input[:splitPoint], bn.batch_normalization(input[:splitPoint], a, b, mean1, std1)) 
         input = T.set_subtensor(input[splitPoint:], bn.batch_normalization(input[splitPoint:], a, b, mean2, std2))                    
+
         
     updateBN = [mean2, var2, normParam['iter']+iterStep]  
-
     return input, updateBN
 
 
@@ -150,7 +156,6 @@ def update_bn(mlp, params, updateT1, t1Data, t1Label):
     print 'BN samples: '
     print oldBN['mean'][-1][0], newBN['mean'][-1][0]
     print oldBN['var'][-1][0], newBN['var'][-1][0]
-
     print oldBN['mean'][1][0], newBN['mean'][1][0]
     print oldBN['var'][1][0], newBN['var'][1][0]
 
