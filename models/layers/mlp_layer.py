@@ -37,8 +37,8 @@ class mlp_layer(object):
             nOut = 10
         else:
             nonLin = params.activation[index]
-            nIn = params.nHidden[index-1]
-            nOut = params.nHidden[index]
+            nIn = params.nHidden[index]
+            nOut = params.nHidden[index+1]
             
 
         # defining shared T1 params
