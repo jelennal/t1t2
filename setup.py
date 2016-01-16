@@ -8,7 +8,7 @@ def conv_setup(params):
     
     '''    
     class conv_layer():
-        def __init__(self, layerType, dimFilters, nFilters, doNoise = True, doBN = True, border='valid'):            
+        def __init__(self, layerType, dimFilters, nFilters, border='valid', doNoise = True, doBN = True):            
             self.type = layerType
             self.filter = dimFilters
             self.maps = nFilters
@@ -17,11 +17,11 @@ def conv_setup(params):
             self.border = border
             
     cl1 = conv_layer('conv', (3, 3), (3, 96))
-    cl2 = conv_layer('conv', (3, 3), (96, 96))
-    cl3 = conv_layer('pool', (3, 3), (96, 96), 1, 0)
+    cl2 = conv_layer('conv', (3, 3), (96, 96), 'full')
+    cl3 = conv_layer('pool', (3, 3), (96, 96), 'full', 1, 0)
     
     cl4 = conv_layer('conv', (3, 3), (96, 192))
-    cl5 = conv_layer('conv', (3, 3), (192, 192))
+    cl5 = conv_layer('conv', (3, 3), (192, 192), 'full')
     cl6 = conv_layer('conv', (3, 3), (192, 192))
     cl7 = conv_layer('pool', (3, 3), (192, 192), 1, 0)
  
@@ -71,8 +71,8 @@ def setup(replace_params={}):
             self.preProcess = 'global_contrast_norm'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
             self.preContrast = 'None'                                          # nonlinear transform over input? 'None'/'tanh'/'arcsinh'/'sigmoid'
             # ARCHITECTURE
-            self.nHidden = [784, 256, 256, 10]                                 # how many hidden units in each layer?
-            self.activation = ['relu','relu','softmax']                        # what nonlinearities in each layer?                      
+            self.nHidden = [784, 1000, 1000, 1000, 10]                         # how many hidden units in each layer?
+            self.activation = ['relu','relu','relu','softmax']                 # what nonlinearities in each layer?                      
             self.nLayers = len(self.nHidden)-1                                 # how many layers are there? 
             # BATCH NORMALIZATION                                               
             self.batchNorm = True                                              # use batch normalization?
@@ -170,7 +170,11 @@ def setup(replace_params={}):
     # add in case of convolutional network                
     if params.model == 'convnet':        
         params.convLayers = conv_setup(params) 
-        params.nLayers = len(params.convLayers)    
+        params.nLayers = len(params.convLayers)
+        
+    # change dimensions for cifar-10
+    if params.dataset == 'cifar10':
+        params.nHidden[0] = 3*1024
       
     if not params.useT2:
         params.train_T2_gradient_jacobian = False
