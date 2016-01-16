@@ -120,7 +120,7 @@ class convnet(object):
         self.updateBN = updateBN
 
         # fix tracking of stats 
-        self.hStat = input
+        self.hStat = stat_monitor(layers = h, params = params)
         self.trackT2Params = trackT2Params
         print len(trackT2Params[param]) 
         print '# t1 params: ', len(paramsT1), '# t2 params: ', len(paramsT2) 

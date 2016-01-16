@@ -1,8 +1,11 @@
 import theano.tensor as T
 import numpy as np
 import theano
+
 from models.layers.mlp_layer import mlp_layer
-import utils
+from training.monitor import stat_monitor
+# import utils
+
 #import numpy as np
 #import theano
 #from theano.tensor.shared_randomstreams import RandomStreams
@@ -50,10 +53,6 @@ class mlp(object):
         for param in params.rglrz: 
             trackT2Params[param] = []
         paramsT1, paramsT2, paramsBN, updateBN = [[],[],[],[]]
-        netStats =  {}
-        for key in params.activTrack:
-            netStats[key] =  []
-
 
         # CONSTRUCT NETWORK
         for i in range(0, params.nLayers):
@@ -102,7 +101,7 @@ class mlp(object):
         self.updateBN = updateBN
 
         # fix tracking of stats 
-        self.hStat = input
+        self.hStat = stat_monitor(layers = h, params = params)
         self.trackT2Params = trackT2Params
         print len(trackT2Params[param]) 
 
@@ -182,55 +181,4 @@ class mlp(object):
         # cost function
         self.classError1 = costFunT1(self.y1, wantOut1)
         self.classError2 = costFunT2(self.y2, wantOut2)
-        
-        
-
-# TO FIX, add in separate function        
-        
-        
-#                    # tracking network statistics
-#            tempMean = T.mean(input, axis = 0)
-#            tempSTD = T.std(input, axis = 0)
-#            tempMax = T.max(input, axis = 0)
-#            
-#            if i == 0:
-#                tempSpars = T.mean(T.le(input, -0.2)) # different for input
-#                tempRNoise = T.switch(T.le(tempSTD, eps), eps, 1. / tempSTD)                      
-#            else:
-#                tempSpars = T.mean(T.le(input, eps))
-#                tempRNoise = T.switch(T.le(tempSTD, eps), eps, 1. / tempSTD)                      
-#            if (key == 'rnoise' or key == 'rnstd') and 'addNoise' in params.rglrz:
-#                 tempRNoise *= h[i].rglrzParam['addNoise']
-#            else:
-#                 tempRNoise *= 0       
-#
-#            for key in params.activTrack:
-#                   statistic = {'mean': T.mean(tempMean),
-#                                 'std': T.mean(tempSTD),
-#                                 'max': T.max(tempMax),
-#                               'const': T.mean(T.le(tempSTD, eps)), 
-#                               'spars': tempSpars,
-#                               'wmean': T.mean(abs(h[i].W)),
-#                                'wstd': T.std(h[i].W),
-#                                'wmax': T.max(abs(h[i].W)),
-#                              'rnoise': T.mean(tempRNoise),
-#                               'rnstd': T.std(tempRNoise),
-#                               'bias' : T.mean(h[i].b),
-#                                   'a': T.mean(h[i].a),
-##                               'bstd' : T.std(h[i].b),
-##                                'astd': T.std(h[i].a),
-#
-#                               }[key]
-#  
-#                   netStats[key] +=  [statistic]
-#                   
-
-#        allStats = [] 
-#        if params.trackStat:
-#            for key in params.activTrack: allStats += [netStats[key]]
-#            self.hStat = T.stacklists(allStats)
-#        else: 
-#            self.hStat =  h[-1].output
-#
-        
         

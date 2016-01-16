@@ -2,34 +2,7 @@ import numpy as np
 import theano
 import theano.tensor as T
 
-def gradient_tracking(param, grad, updates, g_t, m, v, e, params):
-    
-    zero = np.float32(0.)
-    old_grad = theano.shared(np.float32(param.get_value()) * zero, name="old_grad_%s" % param.name)
-    updates.append((old_grad, grad))
-    old_g_t = m/(T.sqrt(v) + e) 
-    all_grads = {
-        'grad' : T.mean(T.sqrt(grad**2)),
-        'grad_rel' : T.mean(T.sqrt((grad/(param+1e-12))**2)),
-        'grad_angle' : T.sum(grad*old_grad)/(T.sqrt(T.sum(grad**2))*T.sqrt(T.sum(old_grad**2))+1e-12) ,
-        'grad_max' : T.max(T.sqrt(grad**2)),
-        'p_t' : T.mean(T.sqrt((g_t)**2)),
-        'p_t_rel' : T.mean(T.sqrt((g_t/(param+1e-12))**2)),
-        'p_t_angle' : T.sum(g_t*old_g_t)/(T.sqrt(T.sum(g_t**2))*T.sqrt(T.sum(old_g_t**2)+1e-12)),
-        'p_t_max' : T.max(T.sqrt(grad**2))
-        }
-    
-    if params.whichGrads == 'all':
-        temp = []
-        for grad_type in params.listGrads:
-            temp += [all_grads[grad_type]] 
-        check = T.stacklists(temp)
-    else:
-        check = all_grads[params.whichGrads]
-    
-    return updates, check    
-                
-
+from training.monitor import grad_monitor
 
 class adam(object):
     ''' Adam adaptive step size + gradient tracking
@@ -80,7 +53,7 @@ class adam(object):
 
         # in case of gradient tracking
         if params.trackGrads:
-            updates, check = gradient_tracking(param, grad, updates, g_t, m, v, self.e, params)
+            updates, check = grad_monitor(param, grad, updates, g_t, m, v, self.e, params)
 
         # if approximationg gradC2 with adam
         if params.avC2grad in ['adam', 'momentum']:
