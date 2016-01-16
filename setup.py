@@ -43,7 +43,6 @@ def conv_setup(params):
         
     return conv_layers
     
-           
 
 def setup(replace_params={}):
     
