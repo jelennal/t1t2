@@ -2,19 +2,19 @@ import numpy as np
 
 def conv_setup(params):
 
-    ''' Defining the convolutional architecture.
+    ''' Defining convolutional architecture.
     
     Arguments: Parameters defining the entire model.        
     
-    '''
-    
+    '''    
     class conv_layer():
-        def __init__(self, layerType, dimFilters, nFilters, doNoise = True, doBN = True):            
+        def __init__(self, layerType, dimFilters, nFilters, doNoise = True, doBN = True, border='valid'):            
             self.type = layerType
             self.filter = dimFilters
             self.maps = nFilters
             self.noise = doNoise
             self.bn = doBN
+            self.border = border
             
     cl1 = conv_layer('conv', (3, 3), (3, 96))
     cl2 = conv_layer('conv', (3, 3), (96, 96))
@@ -29,21 +29,25 @@ def conv_setup(params):
     cl9  = conv_layer('conv', (1, 1), (192, 192))
     cl10 = conv_layer('conv', (1, 1), (192, 10))
     cl11 = conv_layer('average+softmax', (6, 6), (10, 10), 0, 0)
-
+    
     cl11alt = conv_layer('average', (6, 6), (10, 10))
     cl12alt = conv_layer('softmax', (6, 6), (10, 10))
     
     if params.dataset == 'mnist':
         cl1 = conv_layer('conv', (3, 3), (1, 96))
+
+    if params.batchNorm:        
+        conv_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8, cl9, cl10, cl11]   
+    else:
+        conv_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8, cl9, cl10, cl11alt, cl12alt]   
         
-    conv_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8, cl9, cl10, cl11]   
     return conv_layers
     
            
 
 def setup(replace_params={}):
     
-    ''' Defining the entire neural network model and methods for training.
+    ''' Defining entire neural network model and methods for training.
     
     Arguments:  Dictionary of the form {'paramName': paramValue}. 
                 E.g. replace_params = {'useT2': False, 'learnRate1': 0.1}
@@ -121,9 +125,9 @@ def setup(replace_params={}):
             self.learnRate1 = 0.001                                            # T1 max step size
             self.learnRate2 = 0.001                                             # T2 max step size
             self.learnFun1 = 'olin'                                             # learning rate schedule for T1? (see LRFunctions for options)
-            self.learnFun2 = 'period'                                            # learning rate schedule for T2? 
+            self.learnFun2 = 'None'                                            # learning rate schedule for T2? 
             self.opt1 = 'adam'                                                 # optimizer for T1? 'adam'/None (None is SGD)
-            self.opt2 ='adam'                                                   # optimizer for T2? 'adam'/None (None is SGD)
+            self.opt2 = 'adam'                                                   # optimizer for T2? 'adam'/None (None is SGD)
             self.use_momentum = False                                          # applies both to T1 and T2, set the terms to 0 for either if want to disable for one   
             self.momentum1 = [0.5, 0.9]                                        # T1 max and min momentum values
             self.momentum2 = [0.5, 0.9]                                        # T2 max and min momentum values
