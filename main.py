@@ -90,7 +90,7 @@ def run_exp(replace_params={}):
     # THEANO FUNCTIONS 
     updateT1T2 = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph, phase],
-        outputs = [model.guessLabel1, model.guessLabel2] + debugs,
+        outputs = [model.classError1, model.guessLabel1, model.classError2, model.guessLabel2] + debugs,
         updates = updateT1 + updateT2 + updateBN,
         on_unused_input='ignore',
 #        mode = NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),
@@ -98,7 +98,7 @@ def run_exp(replace_params={}):
 
     updateT1 = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph, phase],
-        outputs = [model.guessLabel1] + debugs,
+        outputs = [model.classError1, model.guessLabel1] + debugs,
         updates = updateT1 + updateBN,
         on_unused_input='ignore',
 #        mode = NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),
@@ -142,11 +142,7 @@ def run_exp(replace_params={}):
 
     # INITIALIZE 
     # layers to be read from
-    if params.model == 'convnet':
-        loopOver = filter(lambda i: params.convLayers[i].type =='conv', range(len(params.convLayers)))
-        loopOver = range(len(loopOver))
-    else:
-        loopOver = range(params.nLayers)
+    loopOver = range(params.nLayers)
     # initializing training values
     currentT2Batch = 0
     # samples, batches per epoch, etc.
@@ -163,12 +159,11 @@ def run_exp(replace_params={}):
 
     # TRACKING
     # (1) best results
-    bestVal = 1.
-    bestValTst = 1.
+    bestVal = 1.; bestValTst = 1.
     # (2) errors
-    tempError1, tempError2 = [[],[]]
-    train1Error, train2Error, validError, testError = [[],[],[],[]]
-    train1Cost, train2Cost, penaltyCost, validCost, testCost = [[],[],[],[],[]]
+    tempError1, tempError2, tempCost1, tempCost2 = [[],[], [],[]]
+    t1Error, t2Error, validError, testError = [[],[],[],[]]
+    t1Cost, t2Cost, penaltyCost, validCost, testCost = [[],[],[],[],[]]
     # (3) activation statistics (per layer)
     trackTemplate = np.empty((0,params.nLayers), dtype = object)
     trackLayers = {}
@@ -267,15 +262,17 @@ def run_exp(replace_params={}):
                        res = updateT1T2(t1Data[sampleIndex1], t2Data[sampleIndex2],
                                    t1Label[sampleIndex1], t2Label[sampleIndex2],
                                    lr1, lr2, moment1, moment2, 0, 0)
-                       (y1, y2, debugs) = (res[0], res[1], res[2:])   
+                       (c1, y1, c2, y2, debugs) = (res[0], res[1], res[2], res[3], res[4:])   
                        tempError2 += [1.*sum(t2Label[sampleIndex2] != y2) / params.batchSize2]
+                       tempCost2 += [c2]
                        currentT2Batch += 1                       
                    else:
                        res = updateT1(t1Data[sampleIndex1], t2Data[sampleIndex2],
                                    t1Label[sampleIndex1], t2Label[sampleIndex2],
                                    lr1, 0, moment1, 1, 0, 0)
-                       (y1, debugs) = (res[0], res[1:])                          
+                       (c1, y1, debugs) = (res[0], res[1], res[2:])                          
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]                                   
+                tempCost1 += [c1]
 #               if True in np.isnan(debugs): print 'NANS'
             # TRAIN T1 only ---------------------------------------------------   
             else: 
@@ -284,9 +281,9 @@ def run_exp(replace_params={}):
                 res = updateT1(t1Data[sampleIndex1], t1Data[0:0],
                                t1Label[sampleIndex1], t1Label[0:0],
                                lr1, 0, moment1, 1, 0, 0)
-                (y1, debugs) = (res[0], res[1:])
+                (c1, y1, debugs) = (res[0], res[1], res[2:])
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]
-
+                tempCost1 += [c1]
 
 
             #  EVALUATE, PRINT, STORE
@@ -307,7 +304,7 @@ def run_exp(replace_params={}):
 #                tempVError = 7.; cV = 7.
                        
                 # EVALUATE: test set - in batches of 1000, ow large to fit onto gpu
-                tempError = 0.; nTempSamples = 1000
+                tempError = 0.; tempCost = 0.; nTempSamples = 1000
                 if params.useT2 and currentEpoch > 0.9*params.maxEpoch:
                     np.random.shuffle(testPerm)
                     tempIndex = testPerm[:nTempSamples]
@@ -317,41 +314,15 @@ def run_exp(replace_params={}):
                     for i in range(10):
                         cT, yTest, _ , _ = evaluate(testD[0:0], testD[i*1000:(i+1)*1000], testL[0:0], testL[i*1000:(i+1)*1000], 1)
                         tempError += 1.*sum(yTest != testL[i*1000:(i+1)*1000]) / 1000
+                        tempCost += cT
                     tempError /= 10.                     
-
-                
-#                # (6) TRACK: gradients
-#                if params.batchNorm and not params.aFix:
-#                    nTrained = 3*(params.nLayers) - 1 
-#                else:
-#                    nTrained = 2*(params.nLayers)                 #                
-#                if params.trackGrads:                    
-#                    if trackGrads['T1'] == []:
-#                        if not params.useT2:
-#                            trackGrads['T1'] = np.log10([debugs])
-#                            print 'gradworks!', debugs[0]
-#                        else:
-#                            trackGrads['T1'] = [debugs[:nTrained]]
-#                            trackGrads['T2'] = [debugs[nTrained:]]
-#                    else:
-#                        if not params.useT2:
-#                            trackGrads['T1'] = np.append(trackGrads['T1'], np.log10([debugs]), axis = 0)
-#                            if params.showGrads:
-#                                print np.around([debugs], 3)
-#                                print currentEpoch, ') time=%.f  |  T1 %.2f | test %.2f  ' % ((time() - t_start)/60, train1Error[-1]*100, tempError*100)
-#                        else:
-#                            trackGrads['T1'] = np.append(trackGrads['T1'], [debugs[:nTrained]], axis = 0)                    
-#                            trackGrads['T2'] = np.append(trackGrads['T2'], [debugs[nTrained:]], axis = 0)
-#                            if params.showGrads:
-#                                print np.around([debugs[:nTrained]], 3)
-#                                print np.around([debugs[nTrained:]], 3)
-                                  
+                    cT = tempCost / 10.
                                                        
                 # (2) TRACK: errors                          note: T1 and T2 errors are averaged over training, hence initially can not be compared to valid and test set
-                train1Error += [np.mean(tempError1)]
+                t1Error += [np.mean(tempError1)]; t1Cost += [np.mean(tempCost1)] 
                 if params.useT2:
-                    train2Error += [np.mean(tempError2)]
-                testError +=  [tempError]                                        
+                    t2Error += [np.mean(tempError2)]; t2Cost += [np.mean(tempCost2)]
+                testError +=  [tempError]; testCost += [cT]                                        
                 #validError += [tempVError]
 
                 # RESET tracked errors
@@ -370,23 +341,6 @@ def run_exp(replace_params={}):
                              trackPenal[param] = np.append(trackPenal[param], np.array([tempParam]), axis = 0)
                         elif param in noiseList:
                              trackNoise[param] = np.append(trackNoise[param], np.array([tempParam]), axis = 0)
-#                    for param, j in zip(params.rglrzTrain, range(len(params.rglrzTrain))):
-#                        paramsT2 = map(lambda i: np.mean(model.paramsT2[i*len(params.rglrzTrain)+j].get_value()), range(params.nLayers))
-#                        paramsT2STD = map(lambda i: np.std(model.paramsT2[i*len(params.rglrzTrain)+j].get_value()), range(params.nLayers))
-#                        if param in penalList:
-#                             trackPenal[param] = np.append(trackPenal[param], np.array([paramsT2]), axis = 0)
-#                             trackPenalSTD[param] = np.append(trackPenalSTD[param], np.array([paramsT2STD]), axis = 0)
-#                        elif param in noiseList:
-#                             trackNoise[param] = np.append(trackNoise[param], np.array([paramsT2]), axis = 0)
-#                             trackNoiseSTD[param] = np.append(trackNoiseSTD[param], np.array([paramsT2STD]), axis = 0)
-
-                # (1) TRACK: best performance
-#                if params.useT2:
-#                    if train2Error[len(train2Error)-1] < bestVal:
-#                       bestVal, bestValTst = [train2Error[len(train2Error)-1], tempError]
-#                else:
-#                    if tempVError < bestVal:
-#                       bestVal, bestValTst = [tempVError, tempError]
 
                 # (5) TRACK: global learning rate for T1 and T2
                 trackLR1 += [np.log10(lr1)]
@@ -409,11 +363,13 @@ def run_exp(replace_params={}):
                     print currentEpoch, ') time=%.f     T1 | T2 | test | penalty ' % ((time() - t_start)/60)
                     
                     print 'ERR    %.3f | %.3f | %.3f | - ' % (
-                        train1Error[-1]*100,
-                        train2Error[-1]*100,
+                        t1Error[-1]*100,
+                        t2Error[-1]*100,
                         testError[-1]*100)
-#                    print 'COSTS   %.3f | %.3f | %.3f | %.3f' % (
-#                         c1, c2, cT, p)
+                    print 'COSTS   %.3f | %.3f | %.3f | ? ' % (
+                        t1Cost[-1],
+                        t2Cost[-1],
+                        testCost[-1])
 
                     print 'Log[learningRates] ', np.log10(lr1), 'T1 ', np.log10(lr2), 'T2'                        
                     for param in params.rglrzTrain:
@@ -428,7 +384,7 @@ def run_exp(replace_params={}):
 
                 if ((currentEpoch % params.printInterval) == 0 or (i == params.maxEpoch*nBatches1 - 1)):
                     print currentEpoch, 'TRAIN %.2f  TEST %.2f time %.f' % (
-                    train1Error[-1]*100, testError[-1]*100, ((time() - t_start)/60))
+                    t1Error[-1]*100, testError[-1]*100, ((time() - t_start)/60))
                     print 'Est. time till end: ', (((time() - t_start)/60) / (currentEpoch+1))*(params.maxEpoch - currentEpoch)
 
     except KeyboardInterrupt: pass
@@ -437,44 +393,31 @@ def run_exp(replace_params={}):
     '''
         Prepare variables for output.
     '''
-
-    best = bestValTst
     if params.useT2:
-       lastT2 = train2Error[-1]
-       allErrors = np.concatenate(([train1Error], [train2Error], [testError]), axis = 0)
-       allCosts = np.concatenate(([train1Cost], [train2Cost], [testCost], [penaltyCost]), axis = 0)
-       outParams = {}
-       
-       for param in params.rglrz:
-             if param == 'inputNoise':
-                 tempParam = map(lambda i: model.trackT2Params[param][i].get_value(), range(1))
-                 tempParam = np.append(tempParam, np.zeros(params.nLayers-1))
-             else:
-#                 tempParam = map(lambda i: np.mean(model.trackT2Params[param][i].get_value()), range(params.nLayers))
-#                 tempParam[0] = model.trackT2Params[param][0].get_value()                                  
-                 tempParam = map(lambda i: model.trackT2Params[param][i].get_value(), loopOver)
-                 
-             outParams[param] = tempParam
-             if params.model == 'convnet':
-                j = 0; temp = []
-                for i in range(params.nLayers):
-                    if i in loopOver:
-                        temp += [tempParam[j]]
-                        j += 1
-                    else:
-                        temp += [0.]
-                outParams[param] = temp
-                print temp
 
+       lastT2 = t2Error[-1]
+       allErrors = np.concatenate(([t1Error], [t2Error], [testError]), axis = 0)
+       allCosts = np.concatenate(([t1Cost], [t2Cost], [testCost]), axis = 0) # , [penaltyCost]
+
+       outParams = {}       
+       for param in params.rglrz:
+           if param in penalList:
+               outParams[param] = trackPenal[param][-1]
+           if param in noiseList:
+               outParams[param] = trackNoise[param][-1]
+           else: 
+               print 'param not tracked, fix!'
     else:
+
        lastT2 = 0.
-       allErrors = np.concatenate(([train1Error], [testError]), axis = 0)
-       allCosts = np.concatenate(([train1Cost], [testCost]), axis = 0)
+       allErrors = np.concatenate(([t1Error], [testError]), axis = 0)
+       allCosts = np.concatenate(([t1Cost], [testCost]), axis = 0)
        outParams = {}
        for param in params.rglrz:
            outParams[param] = params.rglrzInitial[param]
 
     modelName = 'pics/'
+    best = min(testError)
     modelName += str(params.nLayers-1)+'x'+str(params.model)+'_best:'+str(best)+'.pdf'
 
     # saved for plot
@@ -505,7 +448,7 @@ def run_exp(replace_params={}):
     # prepared for return
     results = {'bestVal': bestVal, # which could be validation or T2
                'bestValTest': best,
-               'lastT1': train1Error[-1],
+               'lastT1': t1Error[-1],
                'lastT2': lastT2,
                'lastVal': None,#validError[-1],
                'lastTest':testError[-1],
@@ -514,8 +457,8 @@ def run_exp(replace_params={}):
                'trackPenal': trackPenal,
                'trackNoise': trackNoise,
                'setup'  : params,
-#               'lastCTest': testCost[-1], 
-#               'lastCT1': train1Cost[-1],
+               'lastCTest': testCost[-1], 
+               'lastCT1': t1Cost[-1],
                'trainTime': time2train,
                }
 
@@ -523,26 +466,3 @@ def run_exp(replace_params={}):
 
 if __name__ == '__main__':
     run_exp()
-
-
-                # EVALUATE: T1 and T2 set                              only a sample from T1, cause sloooooooooooow
-#                if params.useT2:
-#                    tempSample1 = train1Perm[-1000:]
-#                    tempSample2 = train2Perm[-1000:]
-#                    [c1, c2, p, hStat] = evaluateT1T2(t1Data[tempSample1], t2Data[tempSample2],
-#                                                      t1Label[tempSample1], t2Label[tempSample2], 0)
-#                    # (2) TRACK: costs
-#                    train1Cost += [c1]
-#                    train2Cost += [c2]
-#                    validCost += [cV]
-#                    testCost += [cT]
-#                    penaltyCost += [p]
-#                    # angleCost += [updiff]
-#                    # TRACK: error for T2
-#                    train2Error += [np.mean(tempError2)]#                    
-#                else:
-#                    tempSample1 = train1Perm[-1000:]
-#                    [c1, _, p, hStat] = evaluateT1T2(t1Data[tempSample1], t1Data[0:0],
-#                                                      t1Label[tempSample1], t1Label[0:0], 0)
-#                    testCost += [cT]
-#                    train1Cost += [c1]

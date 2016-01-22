@@ -118,7 +118,7 @@ class conv_layer(object):
 class pool_layer(object):
    def __init__(self, rstream, input, params, index, splitPoint, graph,
                poolShape, inFilters, outFilters, stride, ignore_border = False, 
-               b=None, a=None, normParam=None, noizParam=None):
+               b=None, a=None, normParam=None, rglrzParam=None):
 
         ''' 
             Pooling layer + BN + noise 
@@ -146,12 +146,14 @@ class pool_layer(object):
             self.updateBN = updateBN
 
         # noise
+        self.paramsT2 = []
         if 'addNoise' in params.rglrz and params.convLayers[index].noise:
-            if noizParam is None: 
+            if rglrzParam is None:
+                self.rglrzParam = {}
                 tempValue = params.rglrzInitial['addNoise'][index]            
                 tempParam = np.asarray(tempValue, dtype=theano.config.floatX)
                 noizParam = theano.shared(value=tempParam, name='%s_%d' % ('addNoise', index), borrow=True)
-                self.noizParam=noizParam
+                self.rglrzParam['addNoise']=noizParam
             if params.useT2 and 'addNoise' in params.rglrzTrain:
                 self.paramsT2 = [noizParam]
             self.output = noiseup(self.output, splitPoint, noizParam, params.noiseT1, params, index, rstream)
@@ -160,7 +162,7 @@ class pool_layer(object):
 class average_layer(object):
     def __init__(self, input, params, index, splitPoint, graph,
                  poolShape, inFilters, outFilters, stride, ignore_border = False, 
-                 b=None, a=None, normParam=None, noizParam=None):
+                 b=None, a=None, normParam=None, rglrzParam=None):
         ''' 
             Averaging layer + BN + noise 
         '''        
@@ -182,6 +184,9 @@ class average_layer(object):
             self.paramsBN = [normParam['mean'], normParam['var'], normParam['iter']]
             self.output, updateBN = bn_layer(self.output, self.a, self.b, self.normParam, params, splitPoint, graph)
             self.updateBN = updateBN 
+        # noise   
+        self.paramsT2 = []
+     
  
         # flattening and softmax 
         self.output = T.flatten(self.output, outdim = 2)                                     

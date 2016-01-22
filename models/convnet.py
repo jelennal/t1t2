@@ -88,16 +88,26 @@ class convnet(object):
                 paramsT1 += h[i].paramsT1
 
             # collect T2 params
-            if layer.type in ['conv', 'softmax']:                            
-                for param in params.rglrz: 
-                    if (param == 'inputNoise' and i == 0) or (param != 'inputNoise'):
-                        trackT2Params[param] += [h[-1].rglrzParam[param]]
-                if params.useT2:
-                    paramsT2 += h[i].paramsT2
-            elif layer.type == 'pool' and layer.noise and 'addNoise' in params.rglrz:
-                trackT2Params['addNoise'] += [h[-1].noizParam]
-                if params.useT2 and 'addNoise' in params.rglrzTrain:
-                    paramsT2 += h[i].paramsT2
+            if params.useT2:
+                paramsT2 += h[i].paramsT2
+                
+            # collect T2 for tracking
+            for param in params.rglrz:
+                if param == 'inputNoise':
+                    if i==0:
+                        trackT2Params[param] += [h[-1].rglrzParam[param]]                        
+                    else:
+                        trackT2Params[param] += [0.]
+                if param == 'addNoise':
+                    if layer.noise:
+                        trackT2Params[param] += [h[-1].rglrzParam[param]]                        
+                    else:
+                        trackT2Params[param] += [0.]                    
+                if param in ['L1', 'L2', 'Lmax']:    
+                    if layer.type in ['conv', 'softmax']:
+                        trackT2Params[param] += [h[-1].rglrzParam[param]]                        
+                    else:
+                        trackT2Params[param] += [0.]                                        
             
             # collect BN params&updates
             if params.batchNorm and params.convLayers[i].bn:
@@ -120,7 +130,7 @@ class convnet(object):
         self.updateBN = updateBN
 
         # fix tracking of stats 
-        self.hStat = stat_monitor(layers = h, params = params)
+        #self.hStat = stat_monitor(layers = h, params = params)
         self.trackT2Params = trackT2Params
         print len(trackT2Params[param]) 
         print '# t1 params: ', len(paramsT1), '# t2 params: ', len(paramsT2) 
