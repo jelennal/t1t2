@@ -16,6 +16,20 @@ def store(item, name):
     pickle.dump(item, file)
     file.close()
     return
+    
+def permute(data, label, params):
+
+    ''' Permute data.
+    
+    '''
+
+    rndSeed = RandomState(params.seed)
+    permute = rndSeed.permutation(data.shape[0])
+    data = data[permute]
+    label = label[permute]
+
+    return (data, label)
+    
 
 def read(params):
 
@@ -33,7 +47,7 @@ def read(params):
        vData, vLabel = data[1][0], np.int32(data[1][1])
        testD, testL = data[2][0], np.int32(data[2][1])
     
-    elif params.dataset == 'cifar10':
+    if params.dataset == 'cifar10':
     
        folderName = 'datasets/cifar-10-batches-py/' # assumes unzipped
        if not os.path.exists(folderName):
@@ -51,6 +65,21 @@ def read(params):
        vData = np.float32(dict['data']); vLabel = np.int32(dict['labels'])  
        fo = open(folderName + 'test_batch', 'rb'); dict = cPickle.load(fo); fo.close()
        testD = np.float32(dict['data']); testL = np.int32(dict['labels'])   
+
+    if params.dataset == 'not_mnist':
+        
+       filename = 'datasets/not_mnist.pkl.gz' 
+       if not os.path.exists(filename):
+           raise Exception("Dataset not found!")
+    
+       data = cPickle.load(gzip.open(filename))
+       t1Data, t1Label = data[0][0], np.int32(data[0][1])
+       testD, testL = data[1][0], np.int32(data[1][1])
+                      
+       split = 400000
+       t1Data, t1Label = permute(t1Data, t1Label)                
+       vData, vLabel = t1Data[split:], t1Label[split:]
+       t1Data, t1Label = t1Data[:split], t1Label[:split]
 
 #    TODO
 #    elif params.daaset == 'svhn':        
@@ -130,16 +159,10 @@ def read_preprocess(params):
     
     # read data
     t1Data, t1Label, vData, vLabel, testD, testL = read(params)
-    rndSeed = RandomState(params.seed)
-    
-    def permute(data, label):
-        permute = rndSeed.permutation(data.shape[0])
-        data = data[permute]
-        label = label[permute]
-        return (data, label)
 
-    vData, vLabel = permute(vData, vLabel)
-    t1Data, t1Label = permute(t1Data, t1Label)
+    # permuting data    
+    vData, vLabel = permute(vData, vLabel, params)
+    t1Data, t1Label = permute(t1Data, t1Label, params)
 
     # form datasets T1 and T2 
     if params.useT2:
