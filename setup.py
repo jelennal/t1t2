@@ -28,7 +28,7 @@ def conv_setup(params):
     cl8  = conv_layer('conv', (3, 3), (192, 192))
     cl9  = conv_layer('conv', (1, 1), (192, 192))
     cl10 = conv_layer('conv', (1, 1), (192, 10))
-    cl11 = conv_layer('average+softmax', (6, 6), (10, 10), 0, 0)
+    cl11 = conv_layer('average+softmax', (6, 6), (10, 10), 0, 0, 0)
     
     cl11alt = conv_layer('average', (6, 6), (10, 10))
     cl12alt = conv_layer('softmax', (6, 6), (10, 10))
