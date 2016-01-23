@@ -142,7 +142,7 @@ def run_exp(replace_params={}):
 
     # INITIALIZE 
     # layers to be read from
-    loopOver = range(params.nLayers)-1
+    loopOver = range(params.nLayers-1)
     # initializing training values
     currentT2Batch = 0
     # samples, batches per epoch, etc.
