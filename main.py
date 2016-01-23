@@ -312,7 +312,7 @@ def run_exp(replace_params={}):
                     tempError = 1.*sum(yTest != testL[tempIndex]) / nTempSamples
                 else:                    
                     for i in range(10):
-                        cT, yTest, _ , _ = evaluate(testD[0:0], testD[i*1000:(i+1)*1000], testL[0:0], testL[i*1000:(i+1)*1000], 1)
+                        cT, yTest, _ = evaluate(testD[0:0], testD[i*1000:(i+1)*1000], testL[0:0], testL[i*1000:(i+1)*1000], 1)
                         tempError += 1.*sum(yTest != testL[i*1000:(i+1)*1000]) / 1000
                         tempCost += cT
                     tempError /= 10.                     
