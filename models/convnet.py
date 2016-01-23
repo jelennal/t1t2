@@ -5,6 +5,7 @@ import theano.tensor as T
 from models.layers.conv_layers import conv_layer, pool_layer, average_layer
 from models.layers.mlp_layer import mlp_layer
    
+zero = np.asarray(0., dtype=theano.config.floatX)
 
 class convnet(object):
     def __init__(self, rng, rstream, input1, input2, wantOut1, wantOut2, params, graph, globalParams = None):
@@ -97,17 +98,17 @@ class convnet(object):
                     if i==0 and layer.noise:
                         trackT2Params[param] += [h[-1].rglrzParam[param]]                        
                     else:
-                        trackT2Params[param] += [0.]
+                        trackT2Params[param] += [zero]
                 if param == 'addNoise':
                     if layer.noise:
                         trackT2Params[param] += [h[-1].rglrzParam[param]]                        
                     else:
-                        trackT2Params[param] += [0.]                    
+                        trackT2Params[param] += [zero]                    
                 if param in ['L1', 'L2', 'Lmax']:    
                     if layer.type in ['conv', 'softmax']:
                         trackT2Params[param] += [h[-1].rglrzParam[param]]                        
                     else:
-                        trackT2Params[param] += [0.]                                        
+                        trackT2Params[param] += [zero]                                        
             
             # collect BN params&updates
             if params.batchNorm and params.convLayers[i].bn:
@@ -132,7 +133,8 @@ class convnet(object):
         # fix tracking of stats 
         #self.hStat = stat_monitor(layers = h, params = params)
         self.trackT2Params = trackT2Params
-        print len(trackT2Params[param]) 
+        for param in params.rglrz:
+            print len(trackT2Params[param]) 
         print '# t1 params: ', len(paramsT1), '# t2 params: ', len(paramsT2) 
 
         # output and predicted labels
