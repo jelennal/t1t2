@@ -123,9 +123,24 @@ class pool_layer(object):
         ''' 
             Pooling layer + BN + noise 
         '''        
+        # noise
+        self.paramsT2 = []
+        if 'addNoise' in params.rglrz and params.convLayers[index].noise:
+            if rglrzParam is None:
+                self.rglrzParam = {}
+                tempValue = params.rglrzInitial['addNoise'][index]            
+                tempParam = np.asarray(tempValue, dtype=theano.config.floatX)
+                noizParam = theano.shared(value=tempParam, name='%s_%d' % ('addNoise', index), borrow=True)
+                self.rglrzParam['addNoise']=noizParam
+            if params.useT2 and 'addNoise' in params.rglrzTrain:
+                self.paramsT2 = [noizParam]
+            #self.output = noiseup(self.output, splitPoint, noizParam, params.noiseT1, params, index, rstream)
+            input = noiseup(input, splitPoint, noizParam, params.noiseT1, params, index, rstream)
+
         #  pooling          
         self.output = downsample.max_pool_2d(input, ds = poolShape, st = stride, 
                                             ignore_border = ignore_border, mode = 'max')                                                                                                
+
         # batch normalization
         if params.batchNorm and params.convLayers[index].bn:    
             
@@ -145,7 +160,16 @@ class pool_layer(object):
             self.output, updateBN = bn_layer(self.output, self.a, self.b, self.normParam, params, splitPoint, graph)
             self.updateBN = updateBN
 
-        # noise
+                                                                                   
+                                                                                   
+class average_layer(object):
+    def __init__(self, rstream, input, params, index, splitPoint, graph,
+                 poolShape, inFilters, outFilters, stride, ignore_border = False, 
+                 b=None, a=None, normParam=None, rglrzParam=None):
+        ''' 
+            Averaging layer + BN + noise 
+        '''                
+        # noise   
         self.paramsT2 = []
         if 'addNoise' in params.rglrz and params.convLayers[index].noise:
             if rglrzParam is None:
@@ -156,16 +180,9 @@ class pool_layer(object):
                 self.rglrzParam['addNoise']=noizParam
             if params.useT2 and 'addNoise' in params.rglrzTrain:
                 self.paramsT2 = [noizParam]
-            self.output = noiseup(self.output, splitPoint, noizParam, params.noiseT1, params, index, rstream)
-                                                                                   
-                                                                                   
-class average_layer(object):
-    def __init__(self, input, params, index, splitPoint, graph,
-                 poolShape, inFilters, outFilters, stride, ignore_border = False, 
-                 b=None, a=None, normParam=None, rglrzParam=None):
-        ''' 
-            Averaging layer + BN + noise 
-        '''        
+            #self.output = noiseup(self.output, splitPoint, noizParam, params.noiseT1, params, index, rstream)
+            input = noiseup(input, splitPoint, noizParam, params.noiseT1, params, index, rstream)
+
         # averaging
         self.output = downsample.max_pool_2d(input, ds = poolShape, st = stride, 
                                              ignore_border = ignore_border, mode = 'average_exc_pad')
@@ -184,8 +201,7 @@ class average_layer(object):
             self.paramsBN = [normParam['mean'], normParam['var'], normParam['iter']]
             self.output, updateBN = bn_layer(self.output, self.a, self.b, self.normParam, params, splitPoint, graph)
             self.updateBN = updateBN 
-        # noise   
-        self.paramsT2 = []
+
      
  
         # flattening and softmax 

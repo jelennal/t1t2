@@ -65,7 +65,7 @@ class convnet(object):
                 h.append(pool_layer(rstream=rstream, input=input, params=params, index=i, splitPoint=splitPoint, graph=graph,                      
                                     poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(2,2)))
             elif layer.type in ['average', 'average+softmax']:
-                h.append(average_layer(input=input, params=params, index=i, splitPoint=splitPoint, graph=graph,
+                h.append(average_layer(rstream=rstream, input=input, params=params, index=i, splitPoint=splitPoint, graph=graph,
                                        poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(6,6)))
             elif layer.type == 'softmax':
                 h.append(mlp_layer(rng=rng, rstream=rstream, index=i, splitPoint=splitPoint, input=input,
@@ -94,12 +94,13 @@ class convnet(object):
             # collect T2 for tracking
             for param in params.rglrz:
                 if param == 'inputNoise':
-                    if i==0:
+                    if i==0 and layer.noise:
                         trackT2Params[param] += [h[-1].rglrzParam[param]]                        
                     else:
                         trackT2Params[param] += [0.]
                 if param == 'addNoise':
                     if layer.noise:
+                        print layer.type
                         trackT2Params[param] += [h[-1].rglrzParam[param]]                        
                     else:
                         trackT2Params[param] += [0.]                    

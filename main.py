@@ -106,7 +106,7 @@ def run_exp(replace_params={}):
 
     evaluate = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, graph],
-        outputs = [model.classError2, model.guessLabel2, model.y2, model.hStat], #+ model.h[-1].debugs,
+        outputs = [model.classError2, model.guessLabel2, model.y2], #+ model.h[-1].debugs,
         on_unused_input='ignore')
 # get all these out:
 #        outputs = [model.classError1, model.classError2, model.penalty, model.hStat],
