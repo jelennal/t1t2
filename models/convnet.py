@@ -100,7 +100,6 @@ class convnet(object):
                         trackT2Params[param] += [0.]
                 if param == 'addNoise':
                     if layer.noise:
-                        print layer.type
                         trackT2Params[param] += [h[-1].rglrzParam[param]]                        
                     else:
                         trackT2Params[param] += [0.]                    
