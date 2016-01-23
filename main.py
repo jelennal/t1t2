@@ -43,8 +43,7 @@ def run_exp(replace_params={}):
     ''' 
         Construct Theano functions.
         
-    '''
-    
+    '''    
     # INPUTS   
     graph = T.iscalar('graph')
     phase = T.iscalar('phase')
@@ -106,7 +105,7 @@ def run_exp(replace_params={}):
 
     evaluate = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, graph],
-        outputs = [model.classError2, model.guessLabel2, model.y2], #+ model.h[-1].debugs,
+        outputs = [model.classError2, model.guessLabel2, model.y2, model.penalty], #+ model.h[-1].debugs,
         on_unused_input='ignore')
 # get all these out:
 #        outputs = [model.classError1, model.classError2, model.penalty, model.hStat],
@@ -142,7 +141,7 @@ def run_exp(replace_params={}):
 
     # INITIALIZE 
     # layers to be read from
-    loopOver = range(params.nLayers-1)
+    loopOver = range(params.nLayers)
     # initializing training values
     currentT2Batch = 0
     # samples, batches per epoch, etc.
@@ -308,11 +307,11 @@ def run_exp(replace_params={}):
                 if params.useT2 and currentEpoch > 0.9*params.maxEpoch:
                     np.random.shuffle(testPerm)
                     tempIndex = testPerm[:nTempSamples]
-                    cT, yTest, _ , _ = evaluate(testD[0:0], testD[tempIndex], testL[0:0], testL[tempIndex], 1)
+                    cT, yTest, _ , p = evaluate(testD[0:0], testD[tempIndex], testL[0:0], testL[tempIndex], 1)
                     tempError = 1.*sum(yTest != testL[tempIndex]) / nTempSamples
                 else:                    
                     for i in range(10):
-                        cT, yTest, _ = evaluate(testD[0:0], testD[i*1000:(i+1)*1000], testL[0:0], testL[i*1000:(i+1)*1000], 1)
+                        cT, yTest, _, p = evaluate(testD[0:0], testD[i*1000:(i+1)*1000], testL[0:0], testL[i*1000:(i+1)*1000], 1)
                         tempError += 1.*sum(yTest != testL[i*1000:(i+1)*1000]) / 1000
                         tempCost += cT
                     tempError /= 10.                     
@@ -366,10 +365,11 @@ def run_exp(replace_params={}):
                         t1Error[-1]*100,
                         t2Error[-1]*100,
                         testError[-1]*100)
-                    print 'COSTS   %.3f | %.3f | %.3f | ? ' % (
+                    print 'COSTS   %.3f | %.3f | %.3f | %.3f ' % (
                         t1Cost[-1],
                         t2Cost[-1],
-                        testCost[-1])
+                        testCost[-1],
+                        p)
 
                     print 'Log[learningRates] ', np.log10(lr1), 'T1 ', np.log10(lr2), 'T2'                        
                     for param in params.rglrzTrain:

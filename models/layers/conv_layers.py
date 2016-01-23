@@ -188,10 +188,11 @@ class average_layer(object):
                                              ignore_border = ignore_border, mode = 'average_exc_pad')
 
         # if batch normalization                                             
-        if params.batchNorm and params.convLayers[index].bn:
+        if params.batchNorm and params.convLayers[index].bn:            
             
             _, b, a = t1_shared(params=params, rng=0, index=index, nIn=0, nOut=0, 
                                 outFilters=outFilters, filterShape=0, defineW=0) 
+
             self.b = b; self.a = a    
             self.paramsT1 = [b]
                         
@@ -202,8 +203,7 @@ class average_layer(object):
             self.output, updateBN = bn_layer(self.output, self.a, self.b, self.normParam, params, splitPoint, graph)
             self.updateBN = updateBN 
 
-     
- 
+      
         # flattening and softmax 
         self.output = T.flatten(self.output, outdim = 2)                                     
         if params.convLayers[index].type == 'average+softmax':
