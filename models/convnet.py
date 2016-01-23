@@ -5,7 +5,7 @@ import theano.tensor as T
 from models.layers.conv_layers import conv_layer, pool_layer, average_layer
 from models.layers.mlp_layer import mlp_layer
    
-zero = np.asarray(0., dtype=theano.config.floatX)
+zero = theano.shared(value=0., borrow=True)
 
 class convnet(object):
     def __init__(self, rng, rstream, input1, input2, wantOut1, wantOut2, params, graph, globalParams = None):
