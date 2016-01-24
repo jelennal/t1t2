@@ -58,7 +58,7 @@ def setup(replace_params={}):
             # T2
             self.useT2 = 1                                                     # use T2? 
             self.useVal = 0                                                    # use validation? 
-            self.T1perT2 = 10                                                  # how many T1 updates per one T2 update?
+            self.T1perT2 = 1                                                  # how many T1 updates per one T2 update?
             self.T1perT2epoch = 1                                              # how many epochs with T1 updates per one epoch with T2 updates?
             self.saveName = 'result.pkl'                                       # where to save the data?
             self.T2isT1 = False                                                # sanity check: what if T2 is a subset of T1?
@@ -71,8 +71,8 @@ def setup(replace_params={}):
             self.preProcess = 'global_contrast_norm'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
             self.preContrast = 'None'                                          # nonlinear transform over input? 'None'/'tanh'/'arcsinh'/'sigmoid'
             # ARCHITECTURE
-            self.nHidden = [784, 1000, 1000, 1000, 10]                         # how many hidden units in each layer?
-            self.activation = ['relu','relu','relu','softmax']                 # what nonlinearities in each layer?                      
+            self.nHidden = [784, 200, 200, 200, 10]                         # how many hidden units in each layer?
+            self.activation = ['relu','relu', 'relu', 'softmax']                 # what nonlinearities in each layer?                      
             self.nLayers = len(self.nHidden)-1                                 # how many layers are there? 
             # BATCH NORMALIZATION                                               
             self.batchNorm = True                                              # use batch normalization?
@@ -171,6 +171,8 @@ def setup(replace_params={}):
     if params.model == 'convnet':        
         params.convLayers = conv_setup(params) 
         params.nLayers = len(params.convLayers)
+    else:
+        params.nLayers = len(params.nHidden)-1
         
     # change dimensions for cifar-10
     if params.dataset == 'cifar10':
