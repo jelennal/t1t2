@@ -3,7 +3,7 @@ import theano
 import theano.tensor as T
 
 import theano.tensor.nnet.conv as nnconv
-from theano.tensor.signal import downsample
+from theano.tensor.signal import pool#downsample
 from theano.tensor.shared_randomstreams import RandomStreams
 
 from models.layers.shared import t1_shared, t2_shared
@@ -138,7 +138,7 @@ class pool_layer(object):
             input = noiseup(input, splitPoint, noizParam, params.noiseT1, params, index, rstream)
 
         #  pooling          
-        self.output = downsample.max_pool_2d(input, ds = poolShape, st = stride, 
+        self.output = pool.pool_2d(input, ds = poolShape, st = stride, 
                                             ignore_border = ignore_border, mode = 'max')                                                                                                
 
         # batch normalization
@@ -184,7 +184,7 @@ class average_layer(object):
             input = noiseup(input, splitPoint, noizParam, params.noiseT1, params, index, rstream)
 
         # averaging
-        self.output = downsample.max_pool_2d(input, ds = poolShape, st = stride, 
+        self.output = pool.pool_2d(input, ds = poolShape, st = stride, 
                                              ignore_border = ignore_border, mode = 'average_exc_pad')
 
         # if batch normalization                                             
