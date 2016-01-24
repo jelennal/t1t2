@@ -173,59 +173,35 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
         if not jacCost:
             assert len(mlp.paramsT2) == len(gradT2exact)    
         
-        # UPDATING T2 ------------------------------- DIY
+        # UPDATING T2 ------------------------------- DIY ROP/LOP maybe        
         
-#        rop_grad_noise = []; rop_grad_s = []; rop_s = []
-#        
-#        for (i, grad) in zip(range(params.nLayers - 1), gradC2):
-#            rop_s = g*mlp.h[i-1] rop_s
-        
-        
-        if not jacCost:
+#        assert len(gradT1) == len(gradC2)
+#        print len(gradT1), len(mlp.paramsT2), len(gradC2)
+#        gradreg = T.Lop(gradT1, mlp.paramsT2, gradC2) # add - to each
+#        print len(gradreg)           
             
-            
-#            for (t2, t2e) in zip(mlp.paramsT2, gradT2exact):
-#                    accumulate = None
-#                    for (gt1, gt2) in zip(gradT1, gradC2):
-#                        try:
-#                            val = T.Lop(-gt1, t2, gt2)
-#                        except theano.gradient.DisconnectedInputError:
-#                            val = None
-#                        accumulate = val if accumulate is None else (
-#                            accumulate if val is None else accumulate + val)
-#                    if accumulate is None:
-#                        raise theano.gradient.DisconnectedInputError, 'Cost does not' \
-#                            + ' depend on %s' % t2.name
-#                    gradreg += [accumulate + t2e]
-
-            assert len(gradT1) == len(gradC2)
-            print len(gradT1), len(mlp.paramsT2), len(gradC2)
-            gradreg = T.Lop(gradT1, mlp.paramsT2, gradC2) # add - to each
-            print len(gradreg)           
-            
-        else:
+        assert len(mlp.paramsT1) == len(gradC2)
+        print len(gradT1reg), len(mlp.paramsT1), len(gradC2)        
+        gradreg = T.Rop(gradT1reg, mlp.paramsT1, gradC2) # add - to each
+        print len(gradreg)     
+        print gradreg[0].shape
                                 
-            for (t2, g1r) in zip(mlp.paramsT2, gradT1reg):
-                accumulate = None
-                for (t1, gt2) in zip(mlp.paramsT1, gradC2):
-                    try:
- #                       val = T.Rop(-g1r, t1, gt2)
-                        val = T.Rop(-g1r.flatten(), t1, gt2)
-                    except theano.gradient.DisconnectedInputError:
-                        # print "%s does not affect %s" % (t2.name, t1.name)
-                        val = None
-                    accumulate = val if accumulate is None else (
-                        accumulate if val is None else accumulate + val)
-                if accumulate is None:
-                    raise theano.gradient.DisconnectedInputError, 'Cost does not' \
-                        + ' depend on %s' % t2.name
-                gradreg += [accumulate]
+#        for (t2, g1r) in zip(mlp.paramsT2, gradT1reg):
+#            accumulate = None
+#            for (t1, gt2) in zip(mlp.paramsT1, gradC2):
+#                try:
+#                    #val = T.Rop(-g1r, t1, gt2)
+#                    val = T.Rop(-g1r.flatten(), t1, gt2)
+#                except theano.gradient.DisconnectedInputError:
+#                    # print "%s does not affect %s" % (t2.name, t1.name)
+#                    val = None
+#                accumulate = val if accumulate is None else (
+#                    accumulate if val is None else accumulate + val)
+#            if accumulate is None:
+#                raise theano.gradient.DisconnectedInputError, 'Cost does not' \
+#                    + ' depend on %s' % t2.name
+#            gradreg += [accumulate]
 
-#            assert len(mlp.paramsT1) == len(gradC2)
-#            gradreg = T.Rop(gradT1reg, mlp.paramsT1, gradC2) # add - to each
-#            print len(gradreg)           
-                                
-   
         for param, grad in zip(mlp.paramsT2, gradreg):
             if params.T2onlySGN:
                 grad = T.sgn(grad)
