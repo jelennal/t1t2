@@ -83,8 +83,8 @@ def setup(replace_params={}):
             self.m = 55                                                        # when computing "exact" BN parameters, average over how many samples from training set?
             self.testBN = 'default'                                            # when computing "exact" BN parameters, how? 'default'/'proper'/'lazy'
             # REGULARIZATION
-            self.rglrzTrain = ['addNoise', 'L2']                                     # which rglrz are trained? (which are available? see: rglrzInitial)
-            self.rglrz = ['addNoise', 'L2']                                          # which rglrz are used? 
+            self.rglrzTrain = ['addNoise']                                     # which rglrz are trained? (which are available? see: rglrzInitial)
+            self.rglrz = ['addNoise']                                          # which rglrz are used? 
             self.rglrzPerUnit = []                                             # which rglrz are defined per hidden unit? (default: defined one per layer) 
             self.rglrzPerMap = []                                              # which rglrz are defined per map? (for convnets)
             self.rglrzPerNetwork = []                                          # which rglrz are defined per network?

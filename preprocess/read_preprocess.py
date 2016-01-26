@@ -22,7 +22,6 @@ def permute(data, label, params):
     ''' Permute data.
     
     '''
-
     rndSeed = RandomState(params.seed)
     permute = rndSeed.permutation(data.shape[0])
     data = data[permute]
@@ -250,7 +249,7 @@ def read_preprocess(params):
 
     # new data statistics 
     print ' -data max, min'
-    print np.max(t1Data), np.min(t1Data), np.max(t2Data), np.min(t2Data)
+    print np.max(t1Data), np.min(t1Data)
     print '- size T1, valid, T2'
     print t1Data.shape, vData.shape
     if params.useT2: print t2Data.shape
@@ -278,8 +277,6 @@ def read_preprocess(params):
                 t2Data = t2Data.reshape(-1, 3, 32, 32)    
             
 #        show_samples(t1Data[:100], 50)    
-#    print t1Data.shape, vData.shape, testD.shape
-#    if params.useT2: print t2Data.shape
         
     return t1Data, t1Label, t2Data, t2Label, vData, vLabel, testD, testL
 
