@@ -39,7 +39,6 @@ class convnet(object):
                 tempParam = np.asarray(params.rglrzInitial[rglrz][1], dtype=theano.config.floatX)
                 globalParams[rglrz] = theano.shared(value=tempParam, name='%s_%d' % (rglrz, 1), borrow=True)
 
-
         # initializations of counters, lists and dictionaries
         i = 0
         h = [] 
@@ -51,7 +50,6 @@ class convnet(object):
         netStats =  {}
         for key in params.activTrack:
             netStats[key] =  []
-
      
         # CONSTRUCT NETWORK   
         for layer in params.convLayers:            
@@ -72,7 +70,6 @@ class convnet(object):
                 h.append(mlp_layer(rng=rng, rstream=rstream, index=i, splitPoint=splitPoint, input=input,
                                    params=params, globalParams=globalParams, graph=graph))
 
-
             # collect penalty term
             if layer.type in ['conv', 'softmax'] and ('L2' in params.rglrz):                               
                 if 'L2' in params.rglrzPerMap:                
@@ -80,7 +77,6 @@ class convnet(object):
                 else:     
                     tempW = h[-1].rglrzParam['L2'] * T.sqr(h[-1].W)
                 penalty += T.sum(tempW) 
-
 
             # collect T1 params
             if layer.type in ['conv', 'softmax']:                            
@@ -114,7 +110,6 @@ class convnet(object):
             if params.batchNorm and params.convLayers[i].bn:
                 paramsBN += h[-1].paramsBN
                 updateBN += h[-1].updateBN                
-
             
             input = h[-1].output
             i += 1                   
@@ -160,52 +155,21 @@ class convnet(object):
             def costFun1(y, label):
                 return stable(-T.log(y[T.arange(label.shape[0]), label]),
                               stabilize=False)
-                # return stable(T.nnet.categorical_crossentropy(y, label),
-                #               stabilize=False)
         else:
             raise NotImplementedError
         if params.cost_T2 in ['crossEntropy', 'sigmoidal', 'hingeLoss']:
             def costFun2(y, label):
                 return stable(-T.log(y[T.arange(label.shape[0]), label]),
                               stabilize=False)
-                # return stable(T.nnet.categorical_crossentropy(y, label),
-                #               stabilize=False)
         else:
             raise NotImplementedError
 
-
-        if params.MM == 1:
-            def costFunT1(*args, **kwargs):
-                return T.mean(costFun1(*args, **kwargs))
-            def costFunT2(*args, **kwargs):
-                return T.mean(costFun2(*args, **kwargs))
-            self.y1_avg = self.y1
-            self.guessLabel1_avg = self.guessLabel1
-## ------------------------------------------------------------ case: M>1, TODO
-#        else:
-#            def costFunT1(*args, **kwargs):
-#                raw_cost = costFun1(*args, **kwargs)
-#                print "Cost dimensionality: %d with duplicates: %d" % (raw_cost.ndim,
-#                                                                       params.M)
-#                if raw_cost.ndim == 1:
-#                    raw_cost = raw_cost.reshape((raw_cost.shape[0] // params.M,
-#                                                 params.M))
-#                elif raw_cost.ndim == 2:
-#                    raw_cost = raw_cost.reshape((raw_cost.shape[0] // params.M,
-#                                                 params.M, raw_cost.shape[1]))
-#                    raw_cost = T.sum(raw_cost, axis=2)
-#                raw_cost = -T.mean(utils.LogMeanExp(-raw_cost, axis=1))
-#                return raw_cost
-#            def costFunT2(*args, **kwargs):
-#                return T.mean(costFun1(*args, **kwargs))
-#
-#            # Also take the mean of the guesses
-#            shap = (self.y1.shape[0] // params.M, params.M)
-#            self.y1_avg = self.y1.reshape(tuple([self.y1.shape[0] // params.M,
-#                                           params.M] + [self.y1.shape[s] for s in xrange(1, self.y1.ndim)]),
-#                                          ndim=self.y1.ndim + 1)
-#            self.y1_avg = T.mean(self.y1_avg, axis=1)
-#            self.guessLabel1_avg = T.argmax(self.y1_avg, axis=1)
+        def costFunT1(*args, **kwargs):
+            return T.mean(costFun1(*args, **kwargs))
+        def costFunT2(*args, **kwargs):
+            return T.mean(costFun2(*args, **kwargs))
+        self.y1_avg = self.y1
+        self.guessLabel1_avg = self.guessLabel1
 
         # cost function
         self.classError1 = costFunT1(self.y1, wantOut1)

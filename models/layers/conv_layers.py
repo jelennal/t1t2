@@ -4,7 +4,6 @@ import theano.tensor as T
 
 import theano.tensor.nnet.conv as nnconv
 from theano.tensor.signal import pool#downsample
-from theano.tensor.shared_randomstreams import RandomStreams
 
 from models.layers.shared import t1_shared, t2_shared
 from models.layers.noise import noise_conditions, noiseup, dropout
@@ -95,11 +94,9 @@ class conv_layer(object):
         if noise_conditions(params, index, 'type0'):
             input = noiseup(input, splitPoint, noiz, params.noiseT1, params, index, rstream)
 
-
         # convolution
         convOut = nnconv.conv2d(input, self.W, subsample = stride, 
                                      border_mode = params.convLayers[index].border)
-#                                     image_shape=self.input.shape, filter_shape = filterShape,                                     
 
         # batch normalization & scale+shift   
         if params.batchNorm and params.convLayers[index].bn:
@@ -202,7 +199,6 @@ class average_layer(object):
             self.paramsBN = [normParam['mean'], normParam['var'], normParam['iter']]
             self.output, updateBN = bn_layer(self.output, self.a, self.b, self.normParam, params, splitPoint, graph)
             self.updateBN = updateBN 
-
       
         # flattening and softmax 
         self.output = T.flatten(self.output, outdim = 2)                                     

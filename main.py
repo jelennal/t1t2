@@ -17,8 +17,6 @@ theano.config.floatX = 'float32'
     # Comments:                
 
 '''
-
-
 from setup import setup
 from preprocess.read_preprocess import read_preprocess
 from models.mlp import mlp
@@ -26,11 +24,9 @@ from models.convnet import convnet
 from models.layers.batchnorm import update_bn
 from training.schedule import lr_schedule
 from training.updates import updates
-from training.finite_difference import fd_memory, fd1, fd2, fd3
 
 
 def run_exp(replace_params={}):
-
     
     # READ PARAMETERS AND DATA
     params = setup(replace_params)    
@@ -41,7 +37,7 @@ def run_exp(replace_params={}):
     rstream = RandomStreams(rng.randint(params.seed+1))
 
     ''' 
-        Construct Theano functions.
+        Construct Theano functions
         
     '''    
     # INPUTS   
@@ -71,16 +67,7 @@ def run_exp(replace_params={}):
     # UPDATES
     updateT1, updateT2, upNormDiff, debugs = updates(mlp=model, params=params,
                                  globalLR1=globalLR1, globalLR2=globalLR2,
-                                 momentParam1=moment1, momentParam2=moment2, phase=phase) 
-    if params.finiteDiff:                             
-        fdm = fd_memory(params=params, model=model)    
-        fd_updates1, debugs1 = fd1(mlp=model, fdm=fdm, params=params, globalLR1=globalLR1, globalLR2=globalLR2, 
-                                   momentParam1=moment1, momentParam2=moment2) 
-        fd_updates2 = fd2(mlp=model, fdm=fdm, params=params, globalLR1=globalLR1, globalLR2=globalLR2, 
-                                   momentParam1=moment1, momentParam2=moment2)
-        fd_updates3, debugs3 = fd3(mlp=model, fdm=fdm, params=params, globalLR1=globalLR1, globalLR2=globalLR2, 
-                                   momentParam1=moment1, momentParam2=moment2)
-                                 
+                                 momentParam1=moment1, momentParam2=moment2, phase=phase)                                  
     updateBN = []
     if params.batchNorm:
         for param, up in zip(model.paramsBN, model.updateBN):
@@ -92,7 +79,6 @@ def run_exp(replace_params={}):
         outputs = [model.classError1, model.guessLabel1, model.classError2, model.guessLabel2] + debugs,
         updates = updateT1 + updateT2 + updateBN,
         on_unused_input='ignore',
-#        mode = NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),
         allow_input_downcast=True)
 
     updateT1 = theano.function(
@@ -100,42 +86,15 @@ def run_exp(replace_params={}):
         outputs = [model.classError1, model.guessLabel1] + debugs,
         updates = updateT1 + updateBN,
         on_unused_input='ignore',
-#        mode = NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),
         allow_input_downcast=True)
 
     evaluate = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, graph],
         outputs = [model.classError2, model.guessLabel2, model.y2, model.penalty], #+ model.h[-1].debugs,
-        on_unused_input='ignore')
-# get all these out:
-#        outputs = [model.classError1, model.classError2, model.penalty, model.hStat],
-        
-    # FINITE DIFFERENCE UPDATES   
-    if params.finiteDiff:    
-        finite_diff1 = theano.function(
-            inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph],
-            outputs = [model.guessLabel1_avg, model.guessLabel2], #+ debugs1,
-            updates = fd_updates1 + updateBN,
-            on_unused_input='ignore',
-    #        mode = NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),
-            allow_input_downcast=True)
-        finite_diff2 = theano.function(
-            inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph],
-            updates = fd_updates2,
-            on_unused_input='ignore',
-    #        mode = NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),
-            allow_input_downcast=True)   
-        finite_diff3 = theano.function(
-            inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph],
-    #        outputs = debugs3,
-            updates = fd_updates3,
-            on_unused_input='ignore',
-    #        mode = NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),
-            allow_input_downcast=True)   
-
+        on_unused_input='ignore')        
 
     ''' 
-        Inializations.
+        Inializations
         
     '''
 
@@ -168,16 +127,11 @@ def run_exp(replace_params={}):
     trackLayers = {}
     for stat in params.activTrack: trackLayers[stat] = trackTemplate
     # (4) penalty, noise, activation parametrization (per layer)
-    penalList = ['L1', 'L2', 'LmaxCutoff', 'LmaxSlope', 'LmaxHard']
+    penalList = ['L1', 'L2', 'Lmax', 'LmaxCutoff', 'LmaxSlope', 'LmaxHard']
     noiseList = ['addNoise', 'inputNoise', 'dropOut', 'dropOutB']
-    trackPenal = {}
-    trackNoise = {}
-    trackPenalSTD = {}
-    trackNoiseSTD = {}
-    trackGrads = {}
-
-    trackGrads['T1'] = []
-    trackGrads['T2'] = []
+    trackPenal = {}; trackPenalSTD = {} 
+    trackNoise = {}; trackNoiseSTD = {}            
+    trackGrads = {}; trackGrads['T1'] = []; trackGrads['T2'] = []
     track1stFeatures = []
 
     trackRglrzTemplate = np.empty((0,len(loopOver)), dtype = object)
@@ -189,10 +143,10 @@ def run_exp(replace_params={}):
             trackNoise[param] = trackRglrzTemplate
             trackNoiseSTD[param] = trackRglrzTemplate
     # (5) other
-    trackLR1, trackLR2 = [[],[]] # global learning rate for T1 and T2
+    trackLR1, trackLR2 = [[],[]] 
 
     params.halfLife = params.halfLife*10000./(params.maxEpoch*nBatches1)
-    print 'number of updates total', params.maxEpoch*nBatches1 #maxUpdates
+    print 'number of updates total', params.maxEpoch*nBatches1 
     print 'number of updates within epoch', nBatches1
 
 
@@ -216,7 +170,6 @@ def run_exp(replace_params={}):
                   lr_schedule(fun=params.learnFun1,var=t,halfLife=params.halfLife, start=0),theano.config.floatX)
             lr2 = np.asarray(params.learnRate2*
                   lr_schedule(fun=params.learnFun2,var=t,halfLife=params.halfLife, start=params.triggerT2),theano.config.floatX)
-            #if params.triggerT2 > 0: lr2 = min(lr2, lr1)  # alternatively l2*lr1 , for smoother version
 
             moment1 = np.asarray(params.momentum1[1] - (params.momentum1[1]-(params.momentum1[0]))*
                      lr_schedule(fun=params.momentFun,var=t,halfLife=params.halfLife,start=0), theano.config.floatX)
@@ -232,47 +185,33 @@ def run_exp(replace_params={}):
 
             
             # TRAIN T1&T2 -----------------------------------------------------
-            if params.useT2:
+            if params.useT2:                
                 # Batches                
                 sampleIndex1 = train1Perm[(currentBatch * params.batchSize1):
                                         ((currentBatch + 1) * (params.batchSize1))]
                 sampleIndex2 = train2Perm[(currentT2Batch * params.batchSize2):
                                         ((currentT2Batch + 1) * (params.batchSize2))]                
-                # finite difference update                        
-                if params.finiteDiff:
-                    res = finite_diff1(t1Data[sampleIndex1], t2Data[sampleIndex2],
-                                   t1Label[sampleIndex1], t2Label[sampleIndex2],
-                                   lr1, lr2, moment1, moment2, 0)
-                    (y1, y2, debugs) = (res[0], res[1], res[2:])   
-                    if  ((i+1) % params.T1perT2) == 0:
-                        finite_diff2(t1Data[sampleIndex1], t2Data[sampleIndex2],
-                                     t1Label[sampleIndex1], t2Label[sampleIndex2],
-                                     lr1, lr2, moment1, moment2, 0)
-                        finite_diff3(t1Data[sampleIndex1], t2Data[sampleIndex2],
-                                     t1Label[sampleIndex1], t2Label[sampleIndex2],
-                                     lr1, lr2, moment1, moment2, 0)                                       
-                        tempError2 += [1.*sum(t2Label[sampleIndex2] != y2) / params.batchSize2]
-                        currentT2Batch += 1
-                # exact update
-                else: 
-                   doT2 = ((i+1) % params.T1perT2 ==  0) 
+                
+                if ((i+1) % params.T1perT2 ==  0) and ( i >= params.triggerT2):
 
-                   if  doT2:
-                       res = updateT1T2(t1Data[sampleIndex1], t2Data[sampleIndex2],
-                                   t1Label[sampleIndex1], t2Label[sampleIndex2],
-                                   lr1, lr2, moment1, moment2, 0, 0)
-                       (c1, y1, c2, y2, debugs) = (res[0], res[1], res[2], res[3], res[4:])   
-                       tempError2 += [1.*sum(t2Label[sampleIndex2] != y2) / params.batchSize2]
-                       tempCost2 += [c2]
-                       currentT2Batch += 1                       
-                   else:
-                       res = updateT1(t1Data[sampleIndex1], t2Data[sampleIndex2],
-                                   t1Label[sampleIndex1], t2Label[sampleIndex2],
-                                   lr1, 0, moment1, 1, 0, 0)
-                       (c1, y1, debugs) = (res[0], res[1], res[2:])                          
+                   res = updateT1T2(t1Data[sampleIndex1], t2Data[sampleIndex2],
+                               t1Label[sampleIndex1], t2Label[sampleIndex2],
+                               lr1, lr2, moment1, moment2, 0, 0)
+                   (c1, y1, c2, y2, debugs) = (res[0], res[1], res[2], res[3], res[4:])   
+                   tempError2 += [1.*sum(t2Label[sampleIndex2] != y2) / params.batchSize2]
+                   tempCost2 += [c2]
+                   currentT2Batch += 1                       
+
+                else:
+                    
+                   res = updateT1(t1Data[sampleIndex1], t2Data[sampleIndex2],
+                               t1Label[sampleIndex1], t2Label[sampleIndex2],
+                               lr1, 0, moment1, 1, 0, 0)
+                   (c1, y1, debugs) = (res[0], res[1], res[2:])                          
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]                                   
                 tempCost1 += [c1]
 #               if True in np.isnan(debugs): print 'NANS'
+
             # TRAIN T1 only ---------------------------------------------------   
             else: 
                 sampleIndex1 = train1Perm[(currentBatch * params.batchSize1):
@@ -297,7 +236,7 @@ def run_exp(replace_params={}):
                      
 #                # EVALUATE: validation set
 #                allVar = evaluate(vData[0:0], vData, vLabel[0:0], vLabel, 1)
-#                cV, yTest, _ , hStat, _ = allVar[0], allVar[1], allVar[2], allVar[3], allVar[4:]
+#                cV, yTest, _ , _ = allVar[0], allVar[1], allVar[2], allVar[3], allVar[4:]
 #                #cV, yTest = allVar[0], allVar[1]
 #                tempVError = 1.*sum(yTest != vLabel) / nVSamples
 #                tempVError = 7.; cV = 7.
@@ -321,7 +260,8 @@ def run_exp(replace_params={}):
                 t1Error += [np.mean(tempError1)]; t1Cost += [np.mean(tempCost1)] 
                 if params.useT2:
                     t2Error += [np.mean(tempError2)]; t2Cost += [np.mean(tempCost2)]
-                testError +=  [tempError]; testCost += [cT]                                        
+                testError +=  [tempError]; testCost += [cT]
+                penaltyCost += [p]                                        
                 #validError += [tempVError]
 
                 # RESET tracked errors
@@ -344,17 +284,6 @@ def run_exp(replace_params={}):
                 # (5) TRACK: global learning rate for T1 and T2
                 trackLR1 += [np.log10(lr1)]
                 trackLR2 += [np.log10(lr2)]
-
-                # (3) TRACK: unit statistics
-#                if params.trackStat:
-#                    for key, j in zip(params.activTrack, range(len(params.activTrack))):
-#                        trackLayers[key] = np.append(trackLayers[key], np.array([hStat[j]]), axis = 0)
-#                   if key == 'wnorm' or key == 'wstd':
-#                        print trackLayers[key][-1]                
-#                # (6) TRACK: 1st layer features
-#                if params.track1stFeatures:
-#                    tempW = model.h[0].W.get_value()
-#                    track1stFeatures += [tempW[:, :10]]
     
                 # PRINT errors and time
                 if params.useT2 and ((currentEpoch % params.printInterval) == 0 or 
@@ -369,7 +298,7 @@ def run_exp(replace_params={}):
                         t1Cost[-1],
                         t2Cost[-1],
                         testCost[-1],
-                        p)
+                        penaltyCost[-1])
 
                     print 'Log[learningRates] ', np.log10(lr1), 'T1 ', np.log10(lr2), 'T2'                        
                     for param in params.rglrzTrain:
@@ -377,9 +306,6 @@ def run_exp(replace_params={}):
                             print param, trackPenal[param][-1]
                         if param in noiseList:
                             print param, trackNoise[param][-1]
-#                    if params.trackStat:        
-#                        print 'sparsity: ', trackLayers['spars'][-1]
-#                        print '____________________________________________'
 
 
                 if ((currentEpoch % params.printInterval) == 0 or (i == params.maxEpoch*nBatches1 - 1)):
@@ -397,7 +323,7 @@ def run_exp(replace_params={}):
 
        lastT2 = t2Error[-1]
        allErrors = np.concatenate(([t1Error], [t2Error], [testError]), axis = 0)
-       allCosts = np.concatenate(([t1Cost], [t2Cost], [testCost]), axis = 0) # , [penaltyCost]
+       allCosts = np.concatenate(([t1Cost], [t2Cost], [testCost], [penaltyCost]), axis = 0) 
 
        outParams = {}       
        for param in params.rglrz:
