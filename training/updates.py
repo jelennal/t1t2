@@ -3,6 +3,8 @@ import theano
 import theano.tensor as T
 
 from training.adaptive import adam
+from training.hypergrad import hypergrad
+
 
 def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase):
     
@@ -27,10 +29,9 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
     cost1 = mlp.classError1 + mlp.penalty
     cost2 = mlp.classError2
 
-    # dC1/dT1, dC2/dT1m dC2/dT2
+    # dC1/dT1
     gradC1T1 = T.grad(cost1, mlp.paramsT1)
     gradC2T1 = T.grad(cost2, mlp.paramsT1)
-    gradC1T2 = T.grad(cost1, mlp.paramsT2)        
     
     # take opt from Adam?
     if params.opt1 in ['adam']:
@@ -112,7 +113,8 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
 
         return updates, paramUpPair, adamGrad
         
-    
+
+    # initialzations    
     updateT1 = [] if opt1 is None else opt1.initial_updates()
     updateT2 = [] if opt2 is None else opt2.initial_updates() 
     gradC2T2 = []; tempUps = []
@@ -122,6 +124,7 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
 
     history = {'grad': dict(), 'up': dict()}
     historyC2 = {'grad': dict(), 'up': dict()}
+
 
     # if gradient dC2/dT1 is also approximated with adam
     if params.avC2grad in ['adam', 'momentum'] and params.useT2:
@@ -136,8 +139,7 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
                 tempUps += tempUp[:-1]
                 newC2 += newGrad
             gradC2T1 = newC2
-            
-        
+                   
     # UPDATE T1 params
     for param, grad in zip(mlp.paramsT1, gradC1T1):                
             ups, pair, _ = update_fun(param, grad, None,
@@ -147,14 +149,10 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
     
     # UPDATING T2 params
     if params.useT2:        
-         
-        assert len(mlp.paramsT1) == len(gradC2T1) 
-        assert len(mlp.paramsT2) == len(gradC1T2)
-        assert len(gradC1T1) == len(gradC2T1)
-        # computing hyper-gradient 
-        minus_gradC1T1 = map(lambda grad: -grad, gradC1T1)
-        gradC2T2 = T.Lop(minus_gradC1T1, mlp.paramsT2, gradC2T1) 
-            
+        
+        paramsT2, gradC2T2 = hypergrad(mlp.paramsT1, mlp.paramsT2, gradC2T1, mlp.classError1, mlp.classError2, mlp.penalty)            
+        print [param.name for param in paramsT2]         
+
         for param, grad in zip(mlp.paramsT2, gradC2T2):
             tempUp, tempPair, _ = update_fun(param, T.reshape(grad, param.shape), None,
                                   'T2', {}, opt2, params)
