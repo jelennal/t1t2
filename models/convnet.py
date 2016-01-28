@@ -14,12 +14,12 @@ class convnet(object):
         ''' Constructing the convolutional model.
         
         Arguments: 
-            rng, rstream         - random streams          
-            input1, input2       - input batches from T1 and T2 set
-            wantOut1, wantOut2   - corresponding labels  
-            params               - all model parameters
-            graph                - theano variable determining how are BN params computed
-            globalParams         - T2 params when one-per-network
+            rng, rstream         :: random streams          
+            input1, input2       :: input batches from T1 and T2 set
+            wantOut1, wantOut2   :: corresponding labels  
+            params               :: all model parameters
+            graph                :: theano variable determining how are BN params computed
+            globalParams         :: T2 params when one-per-network
        
         '''
         

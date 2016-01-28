@@ -242,16 +242,16 @@ def run_exp(replace_params={}):
 #                tempVError = 7.; cV = 7.
                        
                 # EVALUATE: test set - in batches of 1000, ow large to fit onto gpu
-                tempError = 0.; tempCost = 0.; nTempSamples = 1000
-                if params.useT2 and currentEpoch > 0.9*params.maxEpoch:
+                tempError = 0.; tempCost = 0.; nTempSamples = 2000; batchSizeT = nTestSamples / 10
+                if params.useT2 and currentEpoch < 0.8*params.maxEpoch:
                     np.random.shuffle(testPerm)
                     tempIndex = testPerm[:nTempSamples]
                     cT, yTest, _ , p = evaluate(testD[0:0], testD[tempIndex], testL[0:0], testL[tempIndex], 1)
                     tempError = 1.*sum(yTest != testL[tempIndex]) / nTempSamples
                 else:                    
                     for i in range(10):
-                        cT, yTest, _, p = evaluate(testD[0:0], testD[i*1000:(i+1)*1000], testL[0:0], testL[i*1000:(i+1)*1000], 1)
-                        tempError += 1.*sum(yTest != testL[i*1000:(i+1)*1000]) / 1000
+                        cT, yTest, _, p = evaluate(testD[0:0], testD[i*batchSizeT:(i+1)*batchSizeT], testL[0:0], testL[i*batchSizeT:(i+1)*batchSizeT], 1)
+                        tempError += 1.*sum(yTest != testL[i*batchSizeT:(i+1)*batchSizeT]) / batchSizeT
                         tempCost += cT
                     tempError /= 10.                     
                     cT = tempCost / 10.

@@ -76,7 +76,7 @@ def read(params):
        testD, testL = data[1][0], np.int32(data[1][1])
                       
        split = 400000
-       t1Data, t1Label = permute(t1Data, t1Label)                
+       t1Data, t1Label = permute(t1Data, t1Label, params)                
        vData, vLabel = t1Data[split:], t1Label[split:]
        t1Data, t1Label = t1Data[:split], t1Label[:split]
 
@@ -248,8 +248,15 @@ def read_preprocess(params):
 
 
     # new data statistics 
-    print ' -data max, min'
+    print ' -data max, min, std'
     print np.max(t1Data), np.min(t1Data)
+    print max(np.std(t1Data, axis = 0)), min(np.std(t1Data, axis = 0))
+    if params.useT2:
+        print np.max(t2Data), np.min(t2Data)        
+        print np.max(np.std(t2Data, axis = 0)), np.min(np.std(t2Data, axis = 0))
+
+    print ' -data max, min'
+
     print '- size T1, valid, T2'
     print t1Data.shape, vData.shape
     if params.useT2: print t2Data.shape
@@ -262,14 +269,14 @@ def read_preprocess(params):
 
     # reshape if convnet
     if params.model == 'convnet':
-        if params.dataset == 'mnist':
+        if params.dataset in ['mnist', 'not_mnist']:
             t1Data = t1Data.reshape(-1, 1, 28, 28)
             vData  =  vData.reshape(-1, 1, 28, 28)
             testD  =  testD.reshape(-1, 1, 28, 28)
             if params.useT2: 
                 t2Data = t2Data.reshape(-1, 1, 28, 28)    
             
-        if params.dataset == 'cifar10':
+        if params.dataset in ['cifar10', 'svhn']:
             t1Data = t1Data.reshape(-1, 3, 32, 32)
             vData  =  vData.reshape(-1, 3, 32, 32)
             testD  =  testD.reshape(-1, 3, 32, 32)

@@ -58,33 +58,33 @@ def setup(replace_params={}):
             # T2
             self.useT2 = 1                                                     # use T2? 
             self.useVal = 0                                                    # use validation? 
-            self.T1perT2 = 1                                                  # how many T1 updates per one T2 update?
+            self.T1perT2 = 10                                                  # how many T1 updates per one T2 update?
             self.T1perT2epoch = 1                                              # how many epochs with T1 updates per one epoch with T2 updates?
             self.saveName = 'result.pkl'                                       # where to save the data?
             self.T2isT1 = False                                                # sanity check: what if T2 is a subset of T1?
             # MODEL
-            self.model = 'convnet'                                             # which model? 'mlp'/'convnet' 
-            self.dataset = 'cifar10'                                           # which dataset? 'mnist'/'svhn'/'cifar10'/'cfar100'
+            self.model = 'mlp'                                             # which model? 'mlp'/'convnet' 
+            self.dataset = 'mnist'                                           # which dataset? 'mnist'/'svhn'/'cifar10'/'cfar100'
             # PREPROCESSING
             self.ratioT2 = 0.5                                                 # how much of validation set goes to T2? [0-1]
             self.ratioValid = 0.05                                             # how much of T2 goes to validatio set
             self.preProcess = 'global_contrast_norm'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
             self.preContrast = 'None'                                          # nonlinear transform over input? 'None'/'tanh'/'arcsinh'/'sigmoid'
             # ARCHITECTURE
-            self.nHidden = [784, 200, 200, 200, 10]                         # how many hidden units in each layer?
-            self.activation = ['relu','relu', 'relu', 'softmax']                 # what nonlinearities in each layer?                      
+            self.nHidden = [784, 1000, 1000, 10]                         # how many hidden units in each layer?
+            self.activation = ['relu','relu', 'softmax']                 # what nonlinearities in each layer?                      
             self.nLayers = len(self.nHidden)-1                                 # how many layers are there? 
             # BATCH NORMALIZATION                                               
             self.batchNorm = True                                              # use batch normalization?
             self.aFix = True                                                   # fix scalling parameter?
             self.movingAvMin = 0.15                                            # moving average paramerer? [0.05-0.20]
             self.movingAvStep = 1                                              # moving average step size? 
-            self.evaluateTestInterval = 15                                     # how often compute the "exact" BN parameters? i.e. replacing moving average with the estimate from the whole training data
+            self.evaluateTestInterval = 30                                     # how often compute the "exact" BN parameters? i.e. replacing moving average with the estimate from the whole training data
             self.m = 55                                                        # when computing "exact" BN parameters, average over how many samples from training set?
             self.testBN = 'default'                                            # when computing "exact" BN parameters, how? 'default'/'proper'/'lazy'
             # REGULARIZATION
-            self.rglrzTrain = ['addNoise']                                     # which rglrz are trained? (which are available? see: rglrzInitial)
-            self.rglrz = ['addNoise']                                          # which rglrz are used? 
+            self.rglrzTrain = ['addNoise']                               # which rglrz are trained? (which are available? see: rglrzInitial)
+            self.rglrz = ['addNoise']                                    # which rglrz are used? 
             self.rglrzPerUnit = []                                             # which rglrz are defined per hidden unit? (default: defined one per layer) 
             self.rglrzPerMap = []                                              # which rglrz are defined per map? (for convnets)
             self.rglrzPerNetwork = []                                          # which rglrz are defined per network?
@@ -99,7 +99,7 @@ def setup(replace_params={}):
                             'dropOut': [0.2, 0.5, 0.5, 0.5],
                            'dropOutB': [0.2, 0.5, 0.5, 0.5]}                   # shared dropout pattern within batch
             self.rglrzLR = {'L1': 0.00001,                                     # regularizer specific learning rates 
-                            'L2': 0.001, 
+                            'L2': 0.0001, 
                     'LmaxCutoff': 0.1, 
                      'LmaxSlope': 0.0001, 
                      'addNoise' : 1., 
@@ -111,7 +111,6 @@ def setup(replace_params={}):
             # TRAINING: COST
             self.cost = 'categorical_crossentropy'                             # cost for T1? 'L2'/'categorical_crossentropy'
             self.cost_T2 = 'crossEntropy' # TODO more                          # cost for T2? 'L2'/'crossEntropy'                       TODO: 'sigmoidal'/'hingeLoss'  
-            self.train_T2_gradient_jacobian = False                            # train the T2 params based on gradient jacobian
             self.penalize_T2 = False                                           # apply penalty for T2? 
             self.cost2Type = 'default'                                         # type of T1T2 cost 'default'/'C2-C1' 
             # TRAINING: T2 FD or exact
@@ -122,20 +121,20 @@ def setup(replace_params={}):
             self.T2onlySGN = False                                             # consider only the sign for T2 update, not the amount
             # TRAINING: OPTIMIZATION
             self.learnRate1 = 0.001                                            # T1 max step size
-            self.learnRate2 = 0.001                                             # T2 max step size
-            self.learnFun1 = 'olin'                                             # learning rate schedule for T1? (see LRFunctions for options)
+            self.learnRate2 = 0.001                                            # T2 max step size
+            self.learnFun1 = 'olin'                                            # learning rate schedule for T1? (see LRFunctions for options)
             self.learnFun2 = 'olin'                                            # learning rate schedule for T2? 
             self.opt1 = 'adam'                                                 # optimizer for T1? 'adam'/None (None is SGD)
-            self.opt2 = 'adam'                                                   # optimizer for T2? 'adam'/None (None is SGD)
+            self.opt2 = 'adam'                                                 # optimizer for T2? 'adam'/None (None is SGD)
             self.use_momentum = False                                          # applies both to T1 and T2, set the terms to 0 for either if want to disable for one   
             self.momentum1 = [0.5, 0.9]                                        # T1 max and min momentum values
             self.momentum2 = [0.5, 0.9]                                        # T2 max and min momentum values
             self.momentFun = 'exp'                                             # momentum decay function
             self.halfLife = 1                                                  # decay function parameter, set to be at halfLife*10,000 updates later
-            self.triggerT2 = 0                                                 # when to start training with T2  
+            self.triggerT2 = 0.                                                # when to start training with T2  
             self.hessian_T2 = False                                            # apply penalty for T2? 
             self.avC2grad = 'None'                                             # taking averaging of C2grad and how? 'None'/'adam'/'momentum'
-            self.MM = 1  # TODO?                                                # for stochastic net: how many parallel samples do we take?  
+            self.MM = 1  # TODO?                                               # for stochastic net: how many parallel samples do we take?  
             # TRAINING: OTHER
             self.batchSize1 = 100
             self.batchSize2 = 100
@@ -172,15 +171,18 @@ def setup(replace_params={}):
         params.convLayers = conv_setup(params) 
         params.nLayers = len(params.convLayers)
     else:
+        assert len(params.nHidden) == len(params.activation)+1
         params.nLayers = len(params.nHidden)-1
         
     # change dimensions for cifar-10
     if params.dataset == 'cifar10':
-        params.nHidden[0] = 3*1024
-      
+        params.nHidden[0] = 3*1024        
+
     if not params.useT2:
-        params.train_T2_gradient_jacobian = False
         params.rglrzTrain = []
+    
+    # increase learning rate of T2 when T2 is updated less often
+    params.learnRate2 *= params.T1perT2     
     
     return params
     
