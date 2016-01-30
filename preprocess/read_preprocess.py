@@ -46,6 +46,38 @@ def read(params):
        vData, vLabel = data[1][0], np.int32(data[1][1])
        testD, testL = data[2][0], np.int32(data[2][1])
     
+    if params.dataset == 'not_mnist':
+        
+       filename = 'datasets/not_mnist.pkl.gz' 
+       if not os.path.exists(filename):
+           raise Exception("Dataset not found!")
+    
+       data = cPickle.load(gzip.open(filename))
+       t1Data, t1Label = data[0][0], np.int32(data[0][1])
+       testD, testL = data[1][0], np.int32(data[1][1])
+       del data
+                      
+       split = 400000
+       t1Data, t1Label = permute(t1Data, t1Label, params)                
+       vData, vLabel = t1Data[split:], t1Label[split:]
+       t1Data, t1Label = t1Data[:split], t1Label[:split]
+
+    if params.dataset == 'svhn':
+        
+       f1 = 'datasets/svhn_train.pkl.gz' 
+       f2 = 'datasets/svhn_test.pkl.gz' 
+       if not os.path.exists(f1) or not os.path.exists(f2):
+           raise Exception("Dataset not found!")
+    
+       [t1Data, t1Label] = cPickle.load(gzip.open(f1))
+       [testD, testL] = cPickle.load(gzip.open(f2))
+                      
+       split = 60000
+       t1Data, t1Label = permute(t1Data, t1Label, params)                
+       vData, vLabel = t1Data[split:], t1Label[split:]
+       t1Data, t1Label = t1Data[:split], t1Label[:split]
+
+
     if params.dataset == 'cifar10':
     
        folderName = 'datasets/cifar-10-batches-py/' # assumes unzipped
@@ -65,20 +97,6 @@ def read(params):
        fo = open(folderName + 'test_batch', 'rb'); dict = cPickle.load(fo); fo.close()
        testD = np.float32(dict['data']); testL = np.int32(dict['labels'])   
 
-    if params.dataset == 'not_mnist':
-        
-       filename = 'datasets/not_mnist.pkl.gz' 
-       if not os.path.exists(filename):
-           raise Exception("Dataset not found!")
-    
-       data = cPickle.load(gzip.open(filename))
-       t1Data, t1Label = data[0][0], np.int32(data[0][1])
-       testD, testL = data[1][0], np.int32(data[1][1])
-                      
-       split = 400000
-       t1Data, t1Label = permute(t1Data, t1Label, params)                
-       vData, vLabel = t1Data[split:], t1Label[split:]
-       t1Data, t1Label = t1Data[:split], t1Label[:split]
 
 #    TODO
 #    elif params.daaset == 'svhn':        
