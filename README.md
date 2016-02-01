@@ -5,11 +5,11 @@ Paper: [http://arxiv.org/abs/1511.06727](http://arxiv.org/abs/1511.06727)
 
 Currently supporting:
 - architectures: mlp, cnn
-- datasets: mnist, svhn, cifar-10 and not_mnist data sets (TODO: link to files and references)
+- datasets: [mnist](http://yann.lecun.com/exdb/mnist/), [svhn](http://ufldl.stanford.edu/housenumbers/), [cifar-10](https://www.cs.toronto.edu/~kriz/cifar.html) and [not_mnist](http://yaroslavvb.blogspot.fi/2011/09/notmnist-dataset.html) data sets
 - regularization: batch normalization; various versions of additive and multiplicative gaussian noise; 
 L1, L2, Lmax, soft Lmax penalties; drop-out, per-batch drop-out
 - training regularizers: all gaussian noise, L2, soft Lmax; 
-parametrized per unit, per map (for convnets), per layer, per network
+parametrized per unit, per map (for cnnd), per layer, per network
 - optimizers: SGD, momentum, adam
 - T2 gradients: via L-op, via finite difference
 - monitoring: various network activation and parameter statistics, gradient norms and angles (TODO: fix for convnet) 
