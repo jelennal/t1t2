@@ -46,7 +46,7 @@ def read(params):
        vData, vLabel = data[1][0], np.int32(data[1][1])
        testD, testL = data[2][0], np.int32(data[2][1])
     
-    if params.dataset == 'not_mnist':
+    elif params.dataset == 'not_mnist':
         
        filename = 'datasets/not_mnist.pkl.gz' 
        if not os.path.exists(filename):
@@ -62,7 +62,7 @@ def read(params):
        vData, vLabel = t1Data[split:], t1Label[split:]
        t1Data, t1Label = t1Data[:split], t1Label[:split]
 
-    if params.dataset == 'svhn':
+    elif params.dataset == 'svhn':
         
        f1 = 'datasets/svhn_train.pkl.gz' 
        f2 = 'datasets/svhn_test.pkl.gz' 
@@ -71,14 +71,14 @@ def read(params):
     
        [t1Data, t1Label] = cPickle.load(gzip.open(f1))
        [testD, testL] = cPickle.load(gzip.open(f2))
+       t1Label = t1Label[:,0]; testL = testL[:,0]
                       
-       split = 60000
+       split = 65000
        t1Data, t1Label = permute(t1Data, t1Label, params)                
        vData, vLabel = t1Data[split:], t1Label[split:]
        t1Data, t1Label = t1Data[:split], t1Label[:split]
 
-
-    if params.dataset == 'cifar10':
+    elif params.dataset == 'cifar10':
     
        folderName = 'datasets/cifar-10-batches-py/' # assumes unzipped
        if not os.path.exists(folderName):
@@ -96,6 +96,9 @@ def read(params):
        vData = np.float32(dict['data']); vLabel = np.int32(dict['labels'])  
        fo = open(folderName + 'test_batch', 'rb'); dict = cPickle.load(fo); fo.close()
        testD = np.float32(dict['data']); testL = np.int32(dict['labels'])   
+
+    else: 
+        print 'Dataset '+params.dataset+' is not implemented.'
 
 
 #    TODO
@@ -121,7 +124,7 @@ def gcn(data, params):
     return temp
 
 
-def zca_white(data, params, eps=1e-5):
+def zca_white(data, params, eps=1e-5): # TODO: FIX doesn't seem to work
     
     ''' ZCA whitening of data.
             
@@ -299,7 +302,12 @@ def read_preprocess(params):
             vData  =  vData.reshape(-1, 3, 32, 32)
             testD  =  testD.reshape(-1, 3, 32, 32)
             if params.useT2: 
-                t2Data = t2Data.reshape(-1, 3, 32, 32)    
+                t2Data = t2Data.reshape(-1, 3, 32, 32)
+                
+    # final shape            
+    if params.useT2: print t2Data.shape, t2Label.shape    
+    print t1Data.shape
+    print t1Label.shape    
             
 #        show_samples(t1Data[:100], 50)    
         
