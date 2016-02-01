@@ -4,12 +4,18 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import numpy as np
 import theano.tensor as T
-from theano.tensor.shared_randomstreams import RandomStreams
+from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import theano
+
+#from theano.compile.nanguardmode import NanGuardMode
 theano.config.exception_verbosity = 'high'
 theano.config.optimizer = 'fast_compile'
 theano.config.floatX = 'float32'
-#from theano.compile.nanguardmode import NanGuardMode
+theano.warn_foat64 = 'warn'
+
+# run with: CUDA_LAUNCH_BLOCKING=1 python
+theano.config.profile = True
+
 
 '''     
     Setup the model and train it!
@@ -91,7 +97,8 @@ def run_exp(replace_params={}):
     evaluate = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, graph],
         outputs = [model.classError2, model.guessLabel2, model.y2, model.penalty], #+ model.h[-1].debugs,
-        on_unused_input='ignore')        
+        on_unused_input='ignore',
+        allow_input_downcast=True)        
 
     ''' 
         Inializations
@@ -106,14 +113,14 @@ def run_exp(replace_params={}):
     # samples, batches per epoch, etc.
     nSamples1 = t1Data.shape[0]
     nVSamples, nTestSamples  = [vData.shape[0], testD.shape[0]]
-    nBatches1  = (nSamples1 / params.batchSize1)
+    nBatches1  = nSamples1 / params.batchSize1
     # permutations
     testPerm = range(0, nTestSamples)
     train1Perm = range(0, nSamples1)
     if params.useT2:
         nSamples2 = t2Data.shape[0]
         train2Perm = range(0, nSamples2)
-        nBatches2 = (nSamples2 / params.batchSize2)
+        nBatches2 = nSamples2 / params.batchSize2
 
     # TRACKING
     # (1) best results
@@ -179,7 +186,7 @@ def run_exp(replace_params={}):
             # PERMUTING T1 AND T2 SETS
             if currentBatch == 0:
                 np.random.shuffle(train1Perm)
-            if params.useT2 and (currentT2Batch == nBatches2) :
+            if params.useT2 and (currentT2Batch == nBatches2 - 1) :
                 np.random.shuffle(train2Perm)
                 currentT2Batch = 0
 
@@ -202,12 +209,11 @@ def run_exp(replace_params={}):
                    tempCost2 += [c2]
                    currentT2Batch += 1                       
 
-                else:
-                    
+                else:                   
                    res = updateT1(t1Data[sampleIndex1], t2Data[sampleIndex2],
                                t1Label[sampleIndex1], t2Label[sampleIndex2],
-                               lr1, 0, moment1, 1, 0, 0)
-                   (c1, y1, debugs) = (res[0], res[1], res[2:])                          
+                               lr1, 0, moment1, 1, 0, 0)                               
+                   (c1, y1, debugs) = (res[0], res[1], res[2:])
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]                                   
                 tempCost1 += [c1]
 #               if True in np.isnan(debugs): print 'NANS'
@@ -235,26 +241,32 @@ def run_exp(replace_params={}):
                        model = update_bn(model, params, updateT1, t1Data, t1Label)    
                      
 #                # EVALUATE: validation set
-#                allVar = evaluate(vData[0:0], vData, vLabel[0:0], vLabel, 1)
+#                allVar = evaluate(vData[:2], vData, vLabel[:2], vLabel, 1)
 #                cV, yTest, _ , _ = allVar[0], allVar[1], allVar[2], allVar[3], allVar[4:]
 #                #cV, yTest = allVar[0], allVar[1]
 #                tempVError = 1.*sum(yTest != vLabel) / nVSamples
 #                tempVError = 7.; cV = 7.
                        
-                # EVALUATE: test set - in batches of 1000, ow large to fit onto gpu
-                tempError = 0.; tempCost = 0.; nTempSamples = 2000; batchSizeT = nTestSamples / 10
+                # EVALUATE: test set - in batches of 1000, ow too large to fit on gpu
+                # Notes: 
+                #   - using dummy input in place of regularized input stream (Th complains ow)
+                #   - graph = 1, hence BN constants do not depend on regularized input stream (see batchnorm.py)         
+                tempError = 0.; tempCost = 0.; nTempSamples = 1000; batchSizeT = nTestSamples / 10
+                dummyD = testD[:2]; dummyL = testL[:2]
                 if params.useT2 and currentEpoch < 0.8*params.maxEpoch:
                     np.random.shuffle(testPerm)
                     tempIndex = testPerm[:nTempSamples]
-                    cT, yTest, _ , p = evaluate(testD[0:0], testD[tempIndex], testL[0:0], testL[tempIndex], 1)
+                    cT, yTest, _ , p = evaluate(dummyD, testD[tempIndex], dummyL, testL[tempIndex], 1)
                     tempError = 1.*sum(yTest != testL[tempIndex]) / nTempSamples
                 else:                    
                     for i in range(10):
-                        cT, yTest, _, p = evaluate(testD[0:0], testD[i*batchSizeT:(i+1)*batchSizeT], testL[0:0], testL[i*batchSizeT:(i+1)*batchSizeT], 1)
+                        cT, yTest, _, p = evaluate(dummyD, testD[i*batchSizeT:(i+1)*batchSizeT], dummyL, testL[i*batchSizeT:(i+1)*batchSizeT], 1)
                         tempError += 1.*sum(yTest != testL[i*batchSizeT:(i+1)*batchSizeT]) / batchSizeT
                         tempCost += cT
                     tempError /= 10.                     
                     cT = tempCost / 10.
+
+
                                                        
                 # (2) TRACK: errors                          note: T1 and T2 errors are averaged over training, hence initially can not be compared to valid and test set
                 t1Error += [np.mean(tempError1)]; t1Cost += [np.mean(tempCost1)] 
