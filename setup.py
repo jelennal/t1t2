@@ -18,17 +18,17 @@ def conv_setup(params):
             
     cl1 = conv_layer('conv', (3, 3), (3, 96))
     cl2 = conv_layer('conv', (3, 3), (96, 96), 'full')
-    cl3 = conv_layer('pool', (3, 3), (96, 96), 'full', 1, 0)
+    cl3 = conv_layer('pool', (3, 3), (96, 96), 'dummy', 1, 0) # dummy is not used
     
     cl4 = conv_layer('conv', (3, 3), (96, 192))
     cl5 = conv_layer('conv', (3, 3), (192, 192), 'full')
     cl6 = conv_layer('conv', (3, 3), (192, 192))
-    cl7 = conv_layer('pool', (3, 3), (192, 192), 1, 0)
+    cl7 = conv_layer('pool', (3, 3), (192, 192), 'dummy', 1, 0)
  
     cl8  = conv_layer('conv', (3, 3), (192, 192))
     cl9  = conv_layer('conv', (1, 1), (192, 192))
     cl10 = conv_layer('conv', (1, 1), (192, 10))
-    cl11 = conv_layer('average+softmax', (6, 6), (10, 10), 0, 0, 0)
+    cl11 = conv_layer('average+softmax', (6, 6), (10, 10), 'dummy', 0, 0)
     
     cl11alt = conv_layer('average', (6, 6), (10, 10))
     cl12alt = conv_layer('softmax', (6, 6), (10, 10), 0, 0, 0)
@@ -63,10 +63,10 @@ def setup(replace_params={}):
             self.saveName = 'result.pkl'                                       # where to save the data?
             self.T2isT1 = False                                                # sanity check: what if T2 is a subset of T1?
             # MODEL
-            self.model = 'mlp'                                             # which model? 'mlp'/'convnet' 
-            self.dataset = 'mnist'                                           # which dataset? 'mnist'/'svhn'/'cifar10'/'cfar100'
+            self.model = 'convnet'                                             # which model? 'mlp'/'convnet' 
+            self.dataset = 'cifar10'                                           # which dataset? 'mnist'/'svhn'/'cifar10'/'cfar100'
             # PREPROCESSING
-            self.ratioT2 = 0.5                                                 # how much of validation set goes to T2? [0-1]
+            self.ratioT2 = 1.                                                 # how much of validation set goes to T2? [0-1]
             self.ratioValid = 0.05                                             # how much of T2 goes to validatio set
             self.preProcess = 'global_contrast_norm'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
             self.preContrast = 'None'                                          # nonlinear transform over input? 'None'/'tanh'/'arcsinh'/'sigmoid'
@@ -79,8 +79,8 @@ def setup(replace_params={}):
             self.aFix = True                                                   # fix scalling parameter?
             self.movingAvMin = 0.15                                            # moving average paramerer? [0.05-0.20]
             self.movingAvStep = 1                                              # moving average step size? 
-            self.evaluateTestInterval = 30                                     # how often compute the "exact" BN parameters? i.e. replacing moving average with the estimate from the whole training data
-            self.m = 55                                                        # when computing "exact" BN parameters, average over how many samples from training set?
+            self.evaluateTestInterval = 25                                     # how often compute the "exact" BN parameters? i.e. replacing moving average with the estimate from the whole training data
+            self.m = 550                                                       # when computing "exact" BN parameters, average over how many samples from training set?
             self.testBN = 'default'                                            # when computing "exact" BN parameters, how? 'default'/'proper'/'lazy'
             # REGULARIZATION
             self.rglrzTrain = ['addNoise']                               # which rglrz are trained? (which are available? see: rglrzInitial)
@@ -94,12 +94,12 @@ def setup(replace_params={}):
                          'LmaxCutoff': 0.*ones,                                # soft cutoff param1
                           'LmaxSlope': 0.*ones,                                # soft cutoff param2
                            'LmaxHard': 2.*ones,                                # hard cutoff aka maxnorm 
-                          'addNoise' : 0.*ones, 
+                          'addNoise' : 0.5*ones, 
                         'inputNoise' : [0.],                                   # only input noise (if trained, need be PerNetwork)
                             'dropOut': [0.2, 0.5, 0.5, 0.5],
                            'dropOutB': [0.2, 0.5, 0.5, 0.5]}                   # shared dropout pattern within batch
             self.rglrzLR = {'L1': 0.00001,                                     # regularizer specific learning rates 
-                            'L2': 0.0001, 
+                            'L2': 0.00001, 
                     'LmaxCutoff': 0.1, 
                      'LmaxSlope': 0.0001, 
                      'addNoise' : 1., 
@@ -122,8 +122,8 @@ def setup(replace_params={}):
             # TRAINING: OPTIMIZATION
             self.learnRate1 = 0.001                                            # T1 max step size
             self.learnRate2 = 0.001                                            # T2 max step size
-            self.learnFun1 = 'olin'                                            # learning rate schedule for T1? (see LRFunctions for options)
-            self.learnFun2 = 'olin'                                            # learning rate schedule for T2? 
+            self.learnFun1 = 'lin'                                            # learning rate schedule for T1? (see LRFunctions for options)
+            self.learnFun2 = 'lin'                                            # learning rate schedule for T2? 
             self.opt1 = 'adam'                                                 # optimizer for T1? 'adam'/None (None is SGD)
             self.opt2 = 'adam'                                                 # optimizer for T2? 'adam'/None (None is SGD)
             self.use_momentum = False                                          # applies both to T1 and T2, set the terms to 0 for either if want to disable for one   
@@ -137,12 +137,12 @@ def setup(replace_params={}):
             self.MM = 1  # TODO?                                               # for stochastic net: how many parallel samples do we take?  
             # TRAINING: OTHER
             self.batchSize1 = 100
-            self.batchSize2 = 100
+            self.batchSize2 = 10
             self.maxEpoch = 150
             self.seed = 1234
             # TRACKING, PRINTING
             self.trackPerEpoch = 1                                             # how often within epoch track error?
-            self.printInterval = 2                                             # how often print error?
+            self.printInterval = 10                                             # how often print error?
             self.printBest = 40000                                             # each updates print best value?
             self.activTrack = ['mean', 'std', 'max',                           # what network statistics are you following?
                                'const', 'spars', 
@@ -175,14 +175,14 @@ def setup(replace_params={}):
         params.nLayers = len(params.nHidden)-1
         
     # change dimensions for cifar-10
-    if params.dataset == 'cifar10':
+    if params.dataset in ['cifar10', 'svhn']:
         params.nHidden[0] = 3*1024        
 
     if not params.useT2:
         params.rglrzTrain = []
     
     # increase learning rate of T2 when T2 is updated less often
-    params.learnRate2 *= params.T1perT2     
+    #params.learnRate2 *= params.T1perT2     
     
     return params
     

@@ -4,11 +4,6 @@ import theano
 
 from models.layers.mlp_layer import mlp_layer
 from training.monitor import stat_monitor
-# import utils
-
-#import numpy as np
-#import theano
-#from theano.tensor.shared_randomstreams import RandomStreams
 
 class mlp(object):
     def __init__(self, rng, rstream, input1, input2, wantOut1, wantOut2, params, graph, globalParams = None): # add cost

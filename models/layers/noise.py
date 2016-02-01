@@ -1,8 +1,6 @@
 import numpy as np
 import theano
 import theano.tensor as T
-from theano.tensor.shared_randomstreams import RandomStreams
-
 
 eps = 1e-8
 zero = np.float32(0.)
@@ -37,7 +35,7 @@ def noiseup(input, splitPoint, noiz, noiseType, params, index, rstream):
 
 def dropout(input, splitPoint, params, rglrzParam, nIn, rstream):
 
-    ''' Dropout noise
+    ''' Dropout noise. 
     
     '''    
 

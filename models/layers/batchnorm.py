@@ -9,7 +9,6 @@ eps = 1e-8
 zero = np.float32(0.)
 one = np.float32(1.)
 
-
 def bn_shared(params, outFilters, index):    
 
     ''' Setup BN shared variables.    
@@ -61,14 +60,14 @@ def bn_layer(input, a, b, normParam, params, splitPoint, graph):
         input = T.set_subtensor(input[:splitPoint], bn.batch_normalization(input[:splitPoint], 
                                 a.dimshuffle('x', 0, 'x', 'x'), b.dimshuffle('x', 0, 'x', 'x'), 
                                 mean1.dimshuffle('x', 0, 'x', 'x'), std1.dimshuffle('x', 0, 'x', 'x'), 
-                                mode='low_mem')) 
+                                mode='low_mem'))  # mode='high_mem'
         input = T.set_subtensor(input[splitPoint:], bn.batch_normalization(input[splitPoint:], 
                                 a.dimshuffle('x', 0, 'x', 'x'), b.dimshuffle('x', 0, 'x', 'x'), 
                                 mean2.dimshuffle('x', 0, 'x', 'x'), std2.dimshuffle('x', 0, 'x', 'x'),                    
-                                mode='low_mem'))                             
+                                mode='low_mem'))  # mode='high_mem'                            
     else:    
-        input = T.set_subtensor(input[:splitPoint], bn.batch_normalization(input[:splitPoint], a, b, mean1, std1)) 
-        input = T.set_subtensor(input[splitPoint:], bn.batch_normalization(input[splitPoint:], a, b, mean2, std2))                    
+        input = T.set_subtensor(input[:splitPoint], bn.batch_normalization(input[:splitPoint], a, b, mean1, std1)) # mode='high_mem'
+        input = T.set_subtensor(input[splitPoint:], bn.batch_normalization(input[splitPoint:], a, b, mean2, std2)) # mode='high_mem'                    
 
         
     updateBN = [mean2, var2, normParam['iter']+iterStep]  

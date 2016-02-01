@@ -1,11 +1,12 @@
 import theano.tensor as T
 
-penalList = ['L1', 'L2', 'Lmax', 'LmaxSlope', 'LmaxCutoff', 'LmaxHard']
-noizList = ['addNoise', 'inputNoise']
+# hyper-params depending only on penalty cost and weights
+penalList = ['L1', 'L2', 'Lmax', 'LmaxSlope', 'LmaxCutoff', 'LmaxHard'] 
+# hyperparameters depending only on classification cost
+noizList = ['addNoise', 'inputNoise'] 
 
 def hypergrad(paramsT1, paramsT2, gradC2T1, c1, c2, p1=0., p2=0.):
     
-
     ''' Function defining the hypergradients: gradients of validation cost 
         with respect to various hyperparameters.     
     
@@ -20,10 +21,9 @@ def hypergrad(paramsT1, paramsT2, gradC2T1, c1, c2, p1=0., p2=0.):
         p1, p2 :: penalty terms on training and validation set (p2 assumed 0)
         
     '''
-
+    # initializations
     rglrzPenal = []; rglrzNoiz = []; gradPenal = []; gradNoiz = []
     W = []; gradC2W = []
-
 
     # separate different types of parameters
     for rglrz in paramsT2:
