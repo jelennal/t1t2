@@ -91,7 +91,10 @@ class mlp(object):
         self.updateBN = updateBN
 
         # fix tracking of stats 
-#        self.hStat = stat_monitor(layers = h, params = params)
+        if params.trackStats: 
+            self.netStats = stat_monitor(layers = h, params = params)
+        else:
+            self.netStats = T.constant(0.)           
         self.trackT2Params = trackT2Params
         print len(trackT2Params[param]) 
 

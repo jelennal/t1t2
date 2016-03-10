@@ -14,8 +14,7 @@ theano.config.floatX = 'float32'
 theano.warn_foat64 = 'warn'
 
 # run with: CUDA_LAUNCH_BLOCKING=1 python
-theano.config.profile = True
-
+#theano.config.profile = True
 
 '''     
     Setup the model and train it!
@@ -30,6 +29,7 @@ from models.convnet import convnet
 from models.layers.batchnorm import update_bn
 from training.schedule import lr_schedule
 from training.updates import updates
+from training.monitor import t2_extract, grad_extract, stat_extract
 
 
 def run_exp(replace_params={}):
@@ -71,32 +71,32 @@ def run_exp(replace_params={}):
                     wantOut1=trueLabel1, wantOut2=trueLabel2, params=params, graph=graph)
 
     # UPDATES
-    updateT1, updateT2, upNormDiff, debugs = updates(mlp=model, params=params,
+    updateT1, updateT2, grads = updates(mlp=model, params=params,
                                  globalLR1=globalLR1, globalLR2=globalLR2,
                                  momentParam1=moment1, momentParam2=moment2, phase=phase)                                  
     updateBN = []
     if params.batchNorm:
         for param, up in zip(model.paramsBN, model.updateBN):
             updateBN += [(param, up)] 
-        
+            
     # THEANO FUNCTIONS 
     updateT1T2 = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph, phase],
-        outputs = [model.classError1, model.guessLabel1, model.classError2, model.guessLabel2] + debugs,
+        outputs = [model.classError1, model.guessLabel1, model.classError2, model.guessLabel2] + grads,
         updates = updateT1 + updateT2 + updateBN,
         on_unused_input='ignore',
         allow_input_downcast=True)
 
     updateT1 = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph, phase],
-        outputs = [model.classError1, model.guessLabel1] + debugs,
+        outputs = [model.classError1, model.guessLabel1] + grads,
         updates = updateT1 + updateBN,
         on_unused_input='ignore',
         allow_input_downcast=True)
 
     evaluate = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, graph],
-        outputs = [model.classError2, model.guessLabel2, model.y2, model.penalty], #+ model.h[-1].debugs,
+        outputs = [model.classError2, model.guessLabel2, model.y2, model.penalty, model.netStats],
         on_unused_input='ignore',
         allow_input_downcast=True)        
 
@@ -136,9 +136,12 @@ def run_exp(replace_params={}):
     # (4) penalty, noise, activation parametrization (per layer)
     penalList = ['L1', 'L2', 'Lmax', 'LmaxCutoff', 'LmaxSlope', 'LmaxHard']
     noiseList = ['addNoise', 'inputNoise', 'dropOut', 'dropOutB']
+    sharedNames = [p.name for p in model.paramsT1] + [p.name for p in model.paramsT2] 
+    print sharedNames
+
     trackPenal = {}; trackPenalSTD = {} 
     trackNoise = {}; trackNoiseSTD = {}            
-    trackGrads = {}; trackGrads['T1'] = []; trackGrads['T2'] = []
+    trackGrads = {}
     track1stFeatures = []
 
     trackRglrzTemplate = np.empty((0,len(loopOver)), dtype = object)
@@ -156,6 +159,7 @@ def run_exp(replace_params={}):
     print 'number of updates total', params.maxEpoch*nBatches1 
     print 'number of updates within epoch', nBatches1
 
+    
 
     ''' 
         Training!!!
@@ -171,7 +175,10 @@ def run_exp(replace_params={}):
             currentBatch = i % nBatches1 # batch order in the current epoch
             currentProgress = np.around(1.*i/nBatches1, decimals=4)
 
-            # LEARNING RATE SCHEDULES & MOMENTUM
+            '''
+                Learning rate and momentum schedules.
+            '''
+            
             t = 1.*i/(params.maxEpoch*nBatches1)
             lr1 = np.asarray(params.learnRate1*
                   lr_schedule(fun=params.learnFun1,var=t,halfLife=params.halfLife, start=0),theano.config.floatX)
@@ -189,11 +196,13 @@ def run_exp(replace_params={}):
             if params.useT2 and (currentT2Batch == nBatches2 - 1) :
                 np.random.shuffle(train2Perm)
                 currentT2Batch = 0
-
             
-            # TRAIN T1&T2 -----------------------------------------------------
-            if params.useT2:                
-                # Batches                
+            ''' 
+                Update T1&T2 
+            '''
+            # Update both
+            if params.useT2:                   
+                # make batches                
                 sampleIndex1 = train1Perm[(currentBatch * params.batchSize1):
                                         ((currentBatch + 1) * (params.batchSize1))]
                 sampleIndex2 = train2Perm[(currentT2Batch * params.batchSize2):
@@ -214,26 +223,31 @@ def run_exp(replace_params={}):
                                t1Label[sampleIndex1], t2Label[sampleIndex2],
                                lr1, 0, moment1, 1, 0, 0)                               
                    (c1, y1, debugs) = (res[0], res[1], res[2:])
+                
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]                                   
                 tempCost1 += [c1]
-#               if True in np.isnan(debugs): print 'NANS'
-
-            # TRAIN T1 only ---------------------------------------------------   
+                # if True in np.isnan(debugs): print 'NANS'
+            
+            # Update T1 only 
             else: 
+                # make batch
                 sampleIndex1 = train1Perm[(currentBatch * params.batchSize1):
                                           ((currentBatch + 1) * (params.batchSize1))]
                 res = updateT1(t1Data[sampleIndex1], t1Data[0:0],
                                t1Label[sampleIndex1], t1Label[0:0],
                                lr1, 0, moment1, 1, 0, 0)
                 (c1, y1, debugs) = (res[0], res[1], res[2:])
+                
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]
                 tempCost1 += [c1]
 
 
-            #  EVALUATE, PRINT, STORE
+            '''
+                Evaluate test, store results, print status.
+            '''
             if np.around(currentProgress % (1./params.trackPerEpoch), decimals=4) == 0 \
                     or i == params.maxEpoch*nBatches1 - 1:
-
+                                        
                 # batchnorm parameters: estimate for the final model
                 if (params.batchNorm and (currentEpoch > 1)) \
                    and ((currentEpoch % params.evaluateTestInterval) == 0 or i == (params.maxEpoch*nBatches1 - 1)) \
@@ -247,28 +261,36 @@ def run_exp(replace_params={}):
 #                tempVError = 1.*sum(yTest != vLabel) / nVSamples
 #                tempVError = 7.; cV = 7.
                        
-                # EVALUATE: test set - in batches of 1000, ow too large to fit on gpu
-                # Notes: 
-                #   - using dummy input in place of regularized input stream (Th complains ow)
-                #   - graph = 1, hence BN constants do not depend on regularized input stream (see batchnorm.py)         
-                tempError = 0.; tempCost = 0.; nTempSamples = 1000; batchSizeT = nTestSamples / 10
+                ''' 
+                    EVALUATE: test set 
+                        - in batches of 1000, ow too large to fit on gpu
+                        - using dummy input in place of regularized input stream (Th complains ow)
+                        - graph = 1, hence BN constants do not depend on regularized input stream (see batchnorm.py)
+                '''    
+                if params.model == 'mlp': 
+                    nTempSamples = 5000       
+                else:
+                    nTempSamples = 2000                           
+                tempError = 0.; tempCost = 0.; batchSizeT = nTestSamples / 10
                 dummyD = testD[:2]; dummyL = testL[:2]
                 if params.useT2 and currentEpoch < 0.8*params.maxEpoch:
                     np.random.shuffle(testPerm)
                     tempIndex = testPerm[:nTempSamples]
-                    cT, yTest, _ , p = evaluate(dummyD, testD[tempIndex], dummyL, testL[tempIndex], 1)
+                    cT, yTest, _ , p, stats = evaluate(dummyD, testD[tempIndex], dummyL, testL[tempIndex], 1)
                     tempError = 1.*sum(yTest != testL[tempIndex]) / nTempSamples
                 else:                    
                     for i in range(10):
-                        cT, yTest, _, p = evaluate(dummyD, testD[i*batchSizeT:(i+1)*batchSizeT], dummyL, testL[i*batchSizeT:(i+1)*batchSizeT], 1)
+                        cT, yTest, _, p, stats = evaluate(dummyD, testD[i*batchSizeT:(i+1)*batchSizeT], dummyL, testL[i*batchSizeT:(i+1)*batchSizeT], 1)
                         tempError += 1.*sum(yTest != testL[i*batchSizeT:(i+1)*batchSizeT]) / batchSizeT
                         tempCost += cT
                     tempError /= 10.                     
                     cT = tempCost / 10.
 
-
                                                        
-                # (2) TRACK: errors                          note: T1 and T2 errors are averaged over training, hence initially can not be compared to valid and test set
+                ''' 
+                    TRACK: class errors & cost
+                '''    
+                # note: T1 and T2 errors are averaged over training, hence initially can not be compared to valid and test set
                 t1Error += [np.mean(tempError1)]; t1Cost += [np.mean(tempCost1)] 
                 if params.useT2:
                     t2Error += [np.mean(tempError2)]; t2Cost += [np.mean(tempCost2)]
@@ -280,24 +302,28 @@ def run_exp(replace_params={}):
                 tempError1 = []
                 tempError2 = []
     
-                # (4) TRACK: T2 parameter statistics
+                ''' 
+                    TRACK: T2 parameter statistics & learning rates                
+                '''                
+                # monitoring T2 values 
                 if params.useT2:
-                    for param in params.rglrz:
-                        if param == 'inputNoise':
-                            tempParam = map(lambda i: np.mean(model.trackT2Params[param][i].get_value()), range(1))
-                            tempParam = np.append(tempParam, np.zeros(len(loopOver)-1))
-                        else:
-                            tempParam = map(lambda i: np.mean(model.trackT2Params[param][i].get_value()), loopOver)
-                        if param in penalList:
-                             trackPenal[param] = np.append(trackPenal[param], np.array([tempParam]), axis = 0)
-                        elif param in noiseList:
-                             trackNoise[param] = np.append(trackNoise[param], np.array([tempParam]), axis = 0)
+                    trackNoise, trackPenal = t2_extract(model, params, trackNoise, trackPenal)                    
 
-                # (5) TRACK: global learning rate for T1 and T2
+                # monitoring activations
+                if params.trackStats:
+                    trackLayers = stat_extract(stats, params, trackLayers)
+                
+                # monitoring gradients
+                if params.trackGrads:
+                    trackGrads = grad_extract(debugs, params, sharedNames, trackGrads)         
+                        
+                # monitoring log learning rates        
                 trackLR1 += [np.log10(lr1)]
                 trackLR2 += [np.log10(lr2)]
     
-                # PRINT errors and time
+                ''' 
+                    STATUS print               
+                '''                
                 if params.useT2 and ((currentEpoch % params.printInterval) == 0 or 
                                      (i == params.maxEpoch*nBatches1 - 1)):
                     print currentEpoch, ') time=%.f     T1 | T2 | test | penalty ' % ((time() - t_start)/60)
@@ -319,11 +345,11 @@ def run_exp(replace_params={}):
                         if param in noiseList:
                             print param, trackNoise[param][-1]
 
-
                 if ((currentEpoch % params.printInterval) == 0 or (i == params.maxEpoch*nBatches1 - 1)):
                     print currentEpoch, 'TRAIN %.2f  TEST %.2f time %.f' % (
                     t1Error[-1]*100, testError[-1]*100, ((time() - t_start)/60))
                     print 'Est. time till end: ', (((time() - t_start)/60) / (currentEpoch+1))*(params.maxEpoch - currentEpoch)
+
 
     except KeyboardInterrupt: pass
     time2train = (time() - t_start)/60

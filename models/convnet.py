@@ -4,6 +4,7 @@ import theano.tensor as T
 
 from models.layers.conv_layers import conv_layer, pool_layer, average_layer
 from models.layers.mlp_layer import mlp_layer
+from training.monitor import stat_monitor 
    
 zero = theano.shared(value=0., borrow=True)
 
@@ -51,7 +52,9 @@ class convnet(object):
         for key in params.activTrack:
             netStats[key] =  []
      
-        # CONSTRUCT NETWORK   
+        '''
+            Constructing layers.
+        '''
         for layer in params.convLayers:            
 
             # construct layer
@@ -125,8 +128,11 @@ class convnet(object):
         self.paramsBN = paramsBN
         self.updateBN = updateBN
 
-        # fix tracking of stats 
-        #self.hStat = stat_monitor(layers = h, params = params)
+        # fix tracking of stats
+        if params.trackStats: 
+            self.netStats = stat_monitor(layers = h, params = params)
+        else:
+            self.netStats = T.constant(0.)            
         self.trackT2Params = trackT2Params
         for param in params.rglrz:
             print len(trackT2Params[param]) 

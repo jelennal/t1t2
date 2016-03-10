@@ -29,7 +29,7 @@ class adam(object):
         zero = np.float32(0.)
         one = np.float32(1.)
         updates = []
-        check = []
+        trackGrads = []
         other = []
       
         # initialize adam shared variables
@@ -53,15 +53,14 @@ class adam(object):
 
         # in case of gradient tracking
         if params.trackGrads:
-            updates, check = grad_monitor(param, grad, updates, g_t, m, v, self.e, params)
+            updates, trackGrads = grad_monitor(param, grad, updates, params, 'adam', g_t, m, v, self.e)
 
         # if approximationg gradC2 with adam
         if params.avC2grad in ['adam', 'momentum']:
             other = g_t * (T.sqrt(fix2) / fix1) # alt: -lr_t*g_t or m_t
 
  
- 
-        return p_t, updates, check, other
+        return p_t, updates, trackGrads, other
 
 
 
