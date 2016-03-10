@@ -109,19 +109,22 @@ def read(params):
 
 def gcn(data, params):
     
-    ''' Global contrast normalization of data. 
-    
+    ''' Global contrast normalization of data.
+        Each image has mean zero and var one across its own pixels.   
+        
     '''    
-    test = data[0]; rest = data[1:]
-    testMean = np.mean(test)        
-    testStd = np.std(test)
-    print testMean, testStd
-    
-    temp = []
-    for item in [test]+rest:
-        temp += [(item-testMean)/testStd]   
+    eps = 1e-8; lam = 0
 
-    return temp
+    gcn_data = []    
+    for temp in data:
+        
+        gcnMean = np.mean(temp, axis=1) 
+        gcnStd = np.maximum(eps, np.sqrt(lam + np.var(temp, axis = 1)))       
+
+        temp = temp - gcnMean[:, np.newaxis]
+        gcn_data += [temp/gcnStd[:, np.newaxis]] 
+    
+    return gcn_data
 
 
 def zca_white(data, params, eps=1e-5): # TODO: FIX doesn't seem to work
@@ -155,14 +158,17 @@ def show_samples(samples, nShow):
     import math
     import matplotlib.pyplot as plt
     
+    
     _, nFeatures, x, y = samples.shape
     nColumns = int(math.ceil(nShow/5.))
+    
     for i in range(nShow):
         plt.subplot(5, nColumns, i+1)
         image = samples[i]
-        image = np.rollaxis(image, 0, 3); 
+        image = np.rollaxis(image, 0, 3)*5.; 
         plt.imshow(image) 
-        plt.axis('off')
+#        plt.axis('off')
+
 
 
 def read_preprocess(params):
@@ -271,6 +277,7 @@ def read_preprocess(params):
     # new data statistics 
     print ' -data max, min, std'
     print np.max(t1Data), np.min(t1Data)
+    print ' -data max std, min std'
     print max(np.std(t1Data, axis = 0)), min(np.std(t1Data, axis = 0))
     if params.useT2:
         print np.max(t2Data), np.min(t2Data)        
@@ -309,7 +316,7 @@ def read_preprocess(params):
     print t1Data.shape
     print t1Label.shape    
             
-#        show_samples(t1Data[:100], 50)    
+#    show_samples(t1Data[:100]/255., 50)    
         
     return t1Data, t1Label, t2Data, t2Label, vData, vLabel, testD, testL
 
