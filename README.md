@@ -9,9 +9,9 @@ Currently supporting:
 - regularization: batch normalization; various versions of additive and multiplicative gaussian noise; 
 L1, L2, Lmax, soft Lmax penalties; drop-out, per-batch drop-out
 - training regularizers: all gaussian noise, L2, soft Lmax; 
-parametrized per unit, per map (for cnnd), per layer, per network
+parametrized per unit, per map (for cnn), per layer, per network
 - optimizers: SGD, momentum, adam
 - T2 gradients: via L-op, via finite difference
-- monitoring: various network activation and parameter statistics, gradient norms and angles (TODO: fix for convnet) 
+- monitoring: various network activation and parameter statistics, gradient norms and angles 
 
 This version was implemented partially as an exercise, more efficient implementation will be developed in [keras](https://github.com/fchollet/keras/).
