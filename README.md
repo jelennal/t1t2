@@ -1,7 +1,9 @@
-# T1-T2
+# T1-T2 Hyperparameter Tuning
 
 Theano implementation of T1-T2 method for tuning continuous hyperparameters.
 Paper: [http://arxiv.org/abs/1511.06727](http://arxiv.org/abs/1511.06727)
+
+![click me][traject]
 
 Currently supporting:
 - architectures: mlp, cnn
@@ -15,3 +17,12 @@ parametrized per unit, per map (for cnn), per layer, per network
 - monitoring: various network activation and parameter statistics, gradient norms and angles 
 
 This version was implemented partially as an exercise, more efficient implementation will be developed in [keras](https://github.com/fchollet/keras/).
+
+
+Test performance with initial random hyperparameters vs. same model just tuned hyperparameter:
+- [MNIST](https://github.com/jelennal/t1t2/blob/master/pics/beforeafter_in_scale(mnist).png) 
+- [SVHN](https://github.com/jelennal/t1t2/blob/master/pics/beforeafter_1(svhn).png) 
+
+(different symbols correspond to different experiment setups: varying network architecture, number and degree of freedom of hyperparameters; x-axis: test error before tuning, y-axis: test error after tuning)
+
+[traject]: https://github.com/jelennal/t1t2/blob/master/pics/trajectories%20in%20hyperspace%20(mnist).png "Hyperparameter values during training with T1-T2, illustrated in hyperparameter space."
