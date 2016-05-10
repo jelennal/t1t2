@@ -96,7 +96,6 @@ class mlp(object):
         else:
             self.netStats = T.constant(0.)           
         self.trackT2Params = trackT2Params
-        print len(trackT2Params[param]) 
 
         # output and predicted labels
         self.h = h
