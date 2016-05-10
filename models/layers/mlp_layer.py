@@ -1,32 +1,18 @@
 import numpy as np
 import theano.tensor as T
-from theano.tensor.shared_randomstreams import RandomStreams
-import theano
 
 from models.layers.shared import t1_shared, t2_shared
+from models.layers.activations import activation
 from models.layers.noise import noise_conditions, noiseup, dropout
 from models.layers.batchnorm import bn_shared, bn_layer
 
-relu = lambda x: T.maximum(0, x)
-identity = lambda x: x
 eps = 1e-8
 zero = np.float32(0.)
 one = np.float32(1.)
-
-def softmax(x):
-    e_x = T.exp(x - x.max(axis=1, keepdims=True))
-    return e_x / e_x.sum(axis=1, keepdims=True)
     
-def activation(input, key):
-    relu = lambda x: T.maximum(0, x)    
-    activFun = {'lin': identity, 'tanh': T.tanh, 'relu': relu, 
-                'sig': T.nnet.sigmoid, 'softmax': softmax}[key]
-    return activFun(input)   
-    
-
 class mlp_layer(object):
-    def __init__(self, rng, rstream, index, splitPoint, input, params, globalParams, graph,# not layerwise params
-                 W=None, b=None, a=None, rglrzParam=None, normParam=None, normWindow=None):                          # looper be share by the network  
+    def __init__(self, rng, rstream, index, splitPoint, input, params, globalParams, graph,
+                 W=None, b=None, a=None, rglrzParam=None, normParam=None, normWindow=None):   
 
         ''' Class defining a fully connected layer.
                                         
@@ -64,7 +50,6 @@ class mlp_layer(object):
                     if rglrz != 'addNoise' or nonLin != 'softmax':
                         self.paramsT2 += [rglrzParam[rglrz]] # if trained, put param here
 
-
         # defining shared BN params
         if normParam is None and params.batchNorm and nonLin != 'softmax':                     
             normParam = bn_shared(params, nOut, index)     
@@ -84,8 +69,7 @@ class mlp_layer(object):
             Input transformations: convolution, BN, noise, nonlinearity 
         '''
 
-
-        # add gauss noise to input                     
+        # add normal noise to input                     
         self.input = input
         if noise_conditions(params, index, 'type0'):
             input = noiseup(input, splitPoint, noiz, params.noiseT1, params, index, rstream)
@@ -111,23 +95,6 @@ class mlp_layer(object):
         # nonlinearity  
         self.output = activation(inputLin, nonLin)
   
-
-
-                   
-        # ----------------------------------------------------------- PENALTY
-#        # difference between Lmax trainable or not
-#        if 'LmaxCutoff' in params.rglrz:
-#            b = self.rglrzParam['LmaxCutoff'] # cutoff
-#            a = self.rglrzParam['LmaxSlope'] # slope
-#            tempNorm = T.sqrt(T.sum(T.sqr(self.W), axis=0))
-#            self.LmaxW = T.sum(a*T.sqr(T.maximum(tempNorm - b, 0)))
-#
-#        if 'LmaxHard' in params.rglrz:
-#            self.penaltyMaxParams = {self.W: self.rglrzParam['LmaxHard']}
-#        elif 'LmaxHard' not in params.rglrzTrain:
-#            self.penaltyMaxParams = {self.W: None}
-
-
 
 
 

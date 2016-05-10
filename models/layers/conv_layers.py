@@ -6,6 +6,7 @@ import theano.tensor.nnet.conv as nnconv
 from theano.tensor.signal import pool#downsample
 
 from models.layers.shared import t1_shared, t2_shared
+from models.layers.activations import activation
 from models.layers.noise import noise_conditions, noiseup, dropout
 from models.layers.batchnorm import bn_shared, bn_layer
 
@@ -13,18 +14,6 @@ eps = 1e-8
 zero = np.float32(0.)
 one = np.float32(1.)
 convNonLin = 'relu'
-
-
-def softmax(x):
-    e_x = T.exp(x - x.max(axis=1, keepdims=True))
-    return e_x / e_x.sum(axis=1, keepdims=True)
-    
-def activation(input, key):
-    relu = lambda x: T.maximum(0, x)    
-    identity = lambda x: x
-    activFun = {'lin': identity, 'tanh': T.tanh, 'relu': relu, 
-                'sig': T.nnet.sigmoid, 'softmax': softmax}[key]
-    return activFun(input)   
 
 
 class conv_layer(object):
@@ -85,7 +74,6 @@ class conv_layer(object):
         elif 'addNoise' in rglrzParam.keys():
             noiz = self.rglrzParam['addNoise']
 
-
         ''' 
             Input transformations: convolution, BN, noise, nonlinearity  
         '''
@@ -123,6 +111,7 @@ class pool_layer(object):
         # noise
         self.paramsT2 = []
         if 'addNoise' in params.rglrz and params.convLayers[index].noise:
+
             if rglrzParam is None:
                 self.rglrzParam = {}
                 tempValue = params.rglrzInitial['addNoise'][index]            
@@ -131,7 +120,7 @@ class pool_layer(object):
                 self.rglrzParam['addNoise']=noizParam
             if params.useT2 and 'addNoise' in params.rglrzTrain:
                 self.paramsT2 = [noizParam]
-            #self.output = noiseup(self.output, splitPoint, noizParam, params.noiseT1, params, index, rstream)
+                
             input = noiseup(input, splitPoint, noizParam, params.noiseT1, params, index, rstream)
 
         #  pooling          
@@ -149,14 +138,13 @@ class pool_layer(object):
                 self.paramsT1 = [b, a]
             else:    
                 self.paramsT1 = [b]
-
+                                
             if normParam is None: 
                 normParam = bn_shared(params, outFilters, index)                                 
             self.normParam = normParam         
             self.paramsBN = [normParam['mean'], normParam['var'], normParam['iter']]
             self.output, updateBN = bn_layer(self.output, self.a, self.b, self.normParam, params, splitPoint, graph)
             self.updateBN = updateBN
-
                                                                                    
                                                                                    
 class average_layer(object):
@@ -203,8 +191,7 @@ class average_layer(object):
         # flattening and softmax 
         self.output = T.flatten(self.output, outdim = 2)                                     
         if params.convLayers[index].type == 'average+softmax':
-            self.output = softmax(self.output)
-
+            self.output = activation(self.output, 'softmax')
                 
 
 

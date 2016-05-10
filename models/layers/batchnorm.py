@@ -153,10 +153,10 @@ def update_bn(mlp, params, updateT1, t1Data, t1Label):
 
     # printing an example of previous and updated versions of test-BN
     print 'BN samples: '
-    print oldBN['mean'][-1][0], newBN['mean'][-1][0]
-    print oldBN['var'][-1][0], newBN['var'][-1][0]
-    print oldBN['mean'][1][0], newBN['mean'][1][0]
-    print oldBN['var'][1][0], newBN['var'][1][0]
+    print 'mean low', oldBN['mean'][1][0], newBN['mean'][1][0]
+    print 'var low', oldBN['var'][1][0], newBN['var'][1][0]
+    print 'mean up', oldBN['mean'][-1][0], newBN['mean'][-1][0]
+    print 'var up', oldBN['var'][-1][0], newBN['var'][-1][0]
 
     
     return mlp  
