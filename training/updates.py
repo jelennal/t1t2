@@ -7,24 +7,22 @@ from training.hypergrad import hypergrad
 from training.monitor import grad_monitor
 
 
-def separateLR(params, sharedName, globalLR1, globalLR2):
-    
-    ''' Get learning rate from the name of the shared variable.
-    
+def separateLR(params, sharedName, globalLR1, globalLR2):    
+    ''' 
+        Get learning rate from the name of the shared variable.    
     '''
     sharedName, _ = sharedName.split('_')
-    customizedLR = globalLR2
-    if (sharedName in params.rglrzLR.keys()):
+    customizedLR = globalLR1
+    if (sharedName in params.rglrzLR.keys()):   
         customizedLR = globalLR2*params.rglrzLR[sharedName]
 
     return customizedLR      
 
 
-def update_fun(param, grad, penaltyparam, dataset, history, opt, learnParams, params):
-
-    ''' Computing the update from gradient. 
-    Adaptive step sizes, learning rate, momentum etc. 
-
+def update_fun(param, grad, dataset, history, opt, learnParams, params):
+    ''' 
+        Computing the update from gradient. 
+        Adaptive step sizes, learning rate, momentum etc. 
     '''
     epsilon = np.asarray(0.0, dtype=theano.config.floatX)
 
@@ -46,7 +44,7 @@ def update_fun(param, grad, penaltyparam, dataset, history, opt, learnParams, pa
 
     # update with adam    
     else:
-        up, updates, trackGrads, other = opt.up(param, grad, params, lr=lr, dataset=dataset)
+        up, updates, trackGrads, other = opt.up(param, grad, params, lr, dataset)
 
     # dictionary param to grad (first time around)
     if params.useT2 and dataset == 'T1':
@@ -76,7 +74,8 @@ def update_fun(param, grad, penaltyparam, dataset, history, opt, learnParams, pa
 
 def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase):
     
-    ''' Computing updates of T1 and T2 parameters.
+    ''' 
+        Computing updates of T1 and T2 parameters.
     
     Inputs:
         mlp :: model
@@ -110,8 +109,7 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
     history = {'grad': dict(), 'up': dict()}
     historyC2 = {'grad': dict(), 'up': dict()}
 
-    learnParams = [globalLR2, globalLR2, momentParam1, momentParam2]
-
+    learnParams = [globalLR1, globalLR2, momentParam1, momentParam2]
 
     ''' 
         If gradient dC2/dT1 is also estimated with adam
@@ -124,8 +122,8 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
     
             newC2 = []
             for param, grad in zip(mlp.paramsT1, gradC2T1):            
-                tempUp, _, newGrad = update_fun(param, T.reshape(grad, param.shape), None, 
-                                                'T1', historyC2, opt3, learnParams, params)
+                tempUp, _, newGrad = update_fun(param, T.reshape(grad, param.shape), 'T1', 
+                                                historyC2, opt3, learnParams, params)
                 tempUps += tempUp[:-1]
                 newC2 += newGrad
             gradC2T1 = newC2
@@ -134,8 +132,8 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
         Updating T1 params
     '''
     for param, grad in zip(mlp.paramsT1, gradC1T1):                
-            ups, track, _ = update_fun(param, grad, None,
-                                        'T1', history, opt1, learnParams, params)
+            ups, track, _ = update_fun(param, grad, 'T1',
+                                       history, opt1, learnParams, params)
             updateT1 += ups
             trackT1grads += [track]
 
@@ -152,8 +150,8 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
             if params.decayT2 > 0. and paramName not in ['L2', 'L1']:
                 grad += params.decayT2*param 
 
-            tempUp, track, _ = update_fun(param, T.reshape(grad, param.shape), None,
-                                          'T2', {}, opt2, learnParams, params)
+            tempUp, track, _ = update_fun(param, T.reshape(grad, param.shape),'T2',
+                                          {}, opt2, learnParams, params)
             updateT2 += tempUp
             trackT2grads += [track]       
                          
