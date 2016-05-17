@@ -62,13 +62,13 @@ class convnet(object):
             if layer.type == 'conv':
                 h.append(conv_layer(rng=rng, rstream=rstream, index=i, splitPoint=splitPoint, input=input,
                                     params=params, globalParams=globalParams, graph=graph,
-                                    filterShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(1,1)))                
+                                    filterShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=layer.stride))                
             elif layer.type == 'pool':
                 h.append(pool_layer(rstream=rstream, input=input, params=params, index=i, splitPoint=splitPoint, graph=graph,                      
-                                    poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(2,2)))
+                                    poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=layer.stride))
             elif layer.type in ['average', 'average+softmax']:
                 h.append(average_layer(rstream=rstream, input=input, params=params, index=i, splitPoint=splitPoint, graph=graph,
-                                       poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=(6,6)))
+                                       poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=layer.stride))
             elif layer.type == 'softmax':
                 h.append(mlp_layer(rng=rng, rstream=rstream, index=i, splitPoint=splitPoint, input=input,
                                    params=params, globalParams=globalParams, graph=graph))
@@ -151,22 +151,22 @@ class convnet(object):
         self.guessLabel2 = T.argmax(self.y2, axis=1)
 
         # cost functions
-        def stable(inp, stabilize=True):
+        def stable(x, stabilize=True):
             if stabilize:
-                inp = T.where(T.isnan(inp), 1000., inp)
-                inp = T.where(T.isinf(inp), 1000., inp)
-            return inp
+                x = T.where(T.isnan(x), 1000., x)
+                x = T.where(T.isinf(x), 1000., x)
+            return x
 
         if params.cost == 'categorical_crossentropy':
             def costFun1(y, label):
                 return stable(-T.log(y[T.arange(label.shape[0]), label]),
-                              stabilize=False)
+                              stabilize=True)
         else:
             raise NotImplementedError
-        if params.cost_T2 in ['crossEntropy', 'sigmoidal', 'hingeLoss']:
+        if params.cost_T2 in ['categorical_crossentropy', 'sigmoidal', 'hingeLoss']:
             def costFun2(y, label):
                 return stable(-T.log(y[T.arange(label.shape[0]), label]),
-                              stabilize=False)
+                              stabilize=True)
         else:
             raise NotImplementedError
 

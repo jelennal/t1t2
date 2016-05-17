@@ -1,47 +1,53 @@
 import numpy as np
 
-def conv_setup(params):
+def cnn_setup(params):
 
     ''' Defining convolutional architecture.
     
     Arguments: Parameters defining the entire model.        
     
     '''    
-    class conv_layer():
-        def __init__(self, layerType, dimFilters, nFilters, border='valid', doNoise = True, doBN = True):            
+    class cnn_layer():
+        def __init__(self, layerType, dimFilters, nFilters, stride, border='valid', doNoise = True, doBN = True):            
             self.type = layerType
             self.filter = dimFilters
             self.maps = nFilters
+            self.stride = stride
+            self.border = border
             self.noise = doNoise
             self.bn = doBN
-            self.border = border
             
-    cl1 = conv_layer('conv', (3, 3), (3, 96))
-    cl2 = conv_layer('conv', (3, 3), (96, 96), 'full')
-    cl3 = conv_layer('pool', (3, 3), (96, 96), 'dummy', 1, 0) # dummy is not used
+    cl1 = cnn_layer('conv', (3, 3), (3, 96),  (1, 1))
+    cl2 = cnn_layer('conv', (3, 3), (96, 96), (1, 1), 'full')
+    cl3 = cnn_layer('pool', (3, 3), (96, 96), (2, 2), 'dummy', 1, 0) # dummy is not used
+    cl3alt = cnn_layer('conv', (3, 3), (96, 96), (2, 2)) # ? stride = 2?    
     
-    cl4 = conv_layer('conv', (3, 3), (96, 192))
-    cl5 = conv_layer('conv', (3, 3), (192, 192), 'full')
-    cl6 = conv_layer('conv', (3, 3), (192, 192))
-    cl7 = conv_layer('pool', (3, 3), (192, 192), 'dummy', 1, 0)
+    cl4 = cnn_layer('conv', (3, 3), (96, 192),  (1, 1))
+    cl5 = cnn_layer('conv', (3, 3), (192, 192), (1, 1), 'full')
+    cl6 = cnn_layer('pool', (3, 3), (192, 192), (2, 2), 'dummy', 1, 0)
+    cl6alt = cnn_layer('conv', (3, 3), (192, 192), (2, 2)) # ? stride = 2?    
  
-    cl8  = conv_layer('conv', (3, 3), (192, 192))
-    cl9  = conv_layer('conv', (1, 1), (192, 192))
-    cl10 = conv_layer('conv', (1, 1), (192, 10))
-    cl11 = conv_layer('average+softmax', (6, 6), (10, 10), 'dummy', 0, 0)
+    cl8  = cnn_layer('conv', (3, 3), (192, 192), (1, 1))
+    cl9  = cnn_layer('conv', (1, 1), (192, 192), (1, 1))
+    cl10 = cnn_layer('conv', (1, 1), (192, 10),  (1, 1), 'valid', 0, 0)
+    cl11 = cnn_layer('average+softmax', (6, 6), (10, 10), (6, 6), 'dummy', 0, 0)
     
-    cl11alt = conv_layer('average', (6, 6), (10, 10))
-    cl12alt = conv_layer('softmax', (6, 6), (10, 10), 0, 0, 0)
+    cl11alt = cnn_layer('average', (6, 6), (10, 10), (6, 6), 0, 0, 0)
+    cl12alt = cnn_layer('softmax', (6, 6), (10, 10), (1, 1), 0, 0, 0)
     
     if params.dataset == 'mnist':
-        cl1 = conv_layer('conv', (3, 3), (1, 96))
-
+        cl1 = cnn_layer('conv', (3, 3), (1, 96), (1, 1))
     if params.batchNorm:        
-        conv_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8, cl9, cl10, cl11]   
+        cnn_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl8, cl9, cl10, cl11]   
+    
     else:
-        conv_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8, cl9, cl10, cl11alt, cl12alt]   
+        cnn_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl8, cl9, cl10, cl11]   
+#        cnn_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8, cl9, cl10, cl11alt, cl12alt]   
+    if params.cnnType == 'all_conv':
+        cnn_layers = [cl1, cl2, cl3alt, cl4, cl5, cl6alt, cl8, cl9, cl10, cl11]        
+    
         
-    return conv_layers
+    return cnn_layers
     
 
 def setup(replace_params={}):
@@ -63,16 +69,17 @@ def setup(replace_params={}):
             self.saveName = 'result.pkl'                                       # where to save the data?
             self.T2isT1 = False                                                # sanity check: what if T2 is a subset of T1?
             # MODEL
-            self.model = 'convnet'                                             # which model? 'mlp'/'convnet' 
-            self.dataset = 'cifar10'                                           # which dataset? 'mnist'/'svhn'/'cifar10'/'cfar100'
+            self.model = 'convnet'                                             # which model? 'mlp'/'convnet' TODO: more!
+            self.dataset = 'mnist'                                             # which dataset? 'mnist'/'svhn'/'cifar10' TODO: /'cfar100'/'not_mnist'
+            self.cnnType = 'all_conv'                                          #'defaulcd datast'/'all_conv'/''
             # PREPROCESSING
-            self.ratioT2 = 1.                                                 # how much of validation set goes to T2? [0-1]
+            self.ratioT2 = 1.                                                  # how much of validation set goes to T2? [0-1]
             self.ratioValid = 0.05                                             # how much of T2 goes to validatio set
-            self.preProcess = 'global_contrast_norm'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
+            self.preProcess = 'm0'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
             self.preContrast = 'None'                                          # nonlinear transform over input? 'None'/'tanh'/'arcsinh'/'sigmoid'
             # ARCHITECTURE
-            self.nHidden = [784, 1000, 1000, 10]                         # how many hidden units in each layer?
-            self.activation = ['relu','relu', 'softmax']                 # what nonlinearities in each layer?                      
+            self.nHidden = [784, 1001, 802, 303, 10]                         # how many hidden units in each layer?
+            self.activation = ['relu','relu', 'relu', 'softmax']               # what nonlinearities in each layer?                      
             self.nLayers = len(self.nHidden)-1                                 # how many layers are there? 
             # BATCH NORMALIZATION                                               
             self.batchNorm = True                                              # use batch normalization?
@@ -83,23 +90,23 @@ def setup(replace_params={}):
             self.m = 550                                                       # when computing "exact" BN parameters, average over how many samples from training set?
             self.testBN = 'default'                                            # when computing "exact" BN parameters, how? 'default'/'proper'/'lazy'
             # REGULARIZATION
-            self.rglrzTrain = ['addNoise']                               # which rglrz are trained? (which are available? see: rglrzInitial)
-            self.rglrz = ['addNoise']                                    # which rglrz are used? 
+            self.rglrzTrain = ['addNoise', 'L2']                               # which rglrz are trained? (which are available? see: rglrzInitial)
+            self.rglrz = ['addNoise', 'L2']                                    # which rglrz are used? 
             self.rglrzPerUnit = []                                             # which rglrz are defined per hidden unit? (default: defined one per layer) 
             self.rglrzPerMap = []                                              # which rglrz are defined per map? (for convnets)
             self.rglrzPerNetwork = []                                          # which rglrz are defined per network?
             self.rglrzPerNetwork1 = []                                         # which rglrz are defined per network? BUT have a separate param for the first layer      
             self.rglrzInitial = {'L1': 0.*ones,                                # initial values of rglrz 
-                                 'L2': 0.*ones,
+                                 'L2': 0.0001*ones,
                          'LmaxCutoff': 0.*ones,                                # soft cutoff param1
                           'LmaxSlope': 0.*ones,                                # soft cutoff param2
                            'LmaxHard': 2.*ones,                                # hard cutoff aka maxnorm 
-                          'addNoise' : 0.5*ones, 
+                          'addNoise' : 0.1*ones, 
                         'inputNoise' : [0.],                                   # only input noise (if trained, need be PerNetwork)
                             'dropOut': [0.2, 0.5, 0.5, 0.5],
                            'dropOutB': [0.2, 0.5, 0.5, 0.5]}                   # shared dropout pattern within batch
-            self.rglrzLR = {'L1': 0.00001,                                     # regularizer specific learning rates 
-                            'L2': 0.00001, 
+            self.rglrzLR = {'L1': 0.0001,                                      # scaling factor for learning rate: corresponds to hyperparameters (expected) order of magnitude
+                            'L2': 0.001, 
                     'LmaxCutoff': 0.1, 
                      'LmaxSlope': 0.0001, 
                      'addNoise' : 1., 
@@ -110,7 +117,7 @@ def setup(replace_params={}):
             self.noiseT1 = 'None'                                              # type of gaussian noise? 'None'/'multi0'/'multi1'/'fake_drop' --> (x+n)/x*n/x*(n+1)/x*s(n) 
             # TRAINING: COST
             self.cost = 'categorical_crossentropy'                             # cost for T1? 'L2'/'categorical_crossentropy'
-            self.cost_T2 = 'crossEntropy' # TODO more                          # cost for T2? 'L2'/'crossEntropy'                       TODO: 'sigmoidal'/'hingeLoss'  
+            self.cost_T2 = 'categorical_crossentropy' # TODO                   # cost for T2? 'L2'/'crossEntropy'                       TODO: 'sigmoidal'/'hingeLoss'  
             self.penalize_T2 = False                                           # apply penalty for T2? 
             self.cost2Type = 'default'                                         # type of T1T2 cost 'default'/'C2-C1' 
             # TRAINING: T2 FD or exact
@@ -121,11 +128,11 @@ def setup(replace_params={}):
             self.T2onlySGN = False                                             # consider only the sign for T2 update, not the amount
             # TRAINING: OPTIMIZATION
             self.learnRate1 = 0.001                                            # T1 max step size
-            self.learnRate2 = 0.001                                            # T2 max step size
-            self.learnFun1 = 'lin'                                            # learning rate schedule for T1? (see LRFunctions for options)
+            self.learnRate2 = 0.01                                            # T2 max step size
+            self.learnFun1 = 'lin'                                             # learning rate schedule for T1? (see LRFunctions for options)
             self.learnFun2 = 'lin'                                            # learning rate schedule for T2? 
             self.opt1 = 'adam'                                                 # optimizer for T1? 'adam'/None (None is SGD)
-            self.opt2 = 'adam'                                                 # optimizer for T2? 'adam'/None (None is SGD)
+            self.opt2 = None                                                 # optimizer for T2? 'adam'/None (None is SGD)
             self.use_momentum = False                                          # applies both to T1 and T2, set the terms to 0 for either if want to disable for one   
             self.momentum1 = [0.5, 0.9]                                        # T1 max and min momentum values
             self.momentum2 = [0.5, 0.9]                                        # T2 max and min momentum values
@@ -134,11 +141,12 @@ def setup(replace_params={}):
             self.triggerT2 = 0.                                                # when to start training with T2  
             self.hessian_T2 = False                                            # apply penalty for T2? 
             self.avC2grad = 'None'                                             # taking averaging of C2grad and how? 'None'/'adam'/'momentum'
-            self.MM = 1  # TODO?                                               # for stochastic net: how many parallel samples do we take?  
+            self.decayT2 = 0.                                                  # decay factor for T2 params 
+            self.MM = 1  # TODO?                                               # for stochastic net: how many parallel samples do we take? IMPORTANCE: could be used to train discrete hyperparameters as well
             # TRAINING: OTHER
-            self.batchSize1 = 100
-            self.batchSize2 = 10
-            self.maxEpoch = 150
+            self.batchSize1 = 128
+            self.batchSize2 = 128
+            self.maxEpoch = 200
             self.seed = 1234
             # TRACKING, PRINTING
             self.trackPerEpoch = 1                                             # how often within epoch track error?
@@ -153,11 +161,10 @@ def setup(replace_params={}):
             self.showGrads = False                                             # do you show gradient values?
 #            self.listGrads = ['grad', 'grad_rel', 'grad_angle', 'grad_max', 'p_t', 'p_t_rel', 'p_t_angle', 'p_t_max']
             self.listGrads = ['grad', 'grad_angle', 'p_t', 'p_t_angle']        # which gradient measures to track?             
-            self.whichGrads = 'all' 
-            self.trackGrads = False
-            self.trackStat = False
-            self.track4Vid = False
-            self.track1stFeatures = False  # TODO                            
+            self.trackGrads = False                                            # monitor gradients during training?
+            self.trackStats = False                                            # monitor layer and weight statistics during training?
+            self.track4Vid = False                                             # TODO: monitor for creating animation
+            self.track1stFeatures = False                                      # TODO: monitor 1st layer features                               
           
     
     # replace default parameters      
@@ -166,22 +173,24 @@ def setup(replace_params={}):
         assert hasattr(params, key), 'Setting %s does not exist' % key
         setattr(params, key, val)
 
-    # add in case of convolutional network                
+    # additional parameters if convolutional network                
     if params.model == 'convnet':        
-        params.convLayers = conv_setup(params) 
+        params.convLayers = cnn_setup(params) 
         params.nLayers = len(params.convLayers)
     else:
         assert len(params.nHidden) == len(params.activation)+1
         params.nLayers = len(params.nHidden)-1
         
-    # change dimensions for cifar-10
+    # change dimensions for cifar-10 and svhn
     if params.dataset in ['cifar10', 'svhn']:
         params.nHidden[0] = 3*1024        
 
-    if not params.useT2:
+    if (not params.useT2) or (params.rglrz == []):
         params.rglrzTrain = []
+        params.useT2 = False
+        
     
-    # increase learning rate of T2 when T2 is updated less often
+    # increase learning rate of T2 in proportion to how rarely T2 params are updated
     #params.learnRate2 *= params.T1perT2     
     
     return params
