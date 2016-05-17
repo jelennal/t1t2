@@ -5,6 +5,10 @@ eps = np.float32(1e-8)
 zero = np.float32(0.)
 one = np.float32(1.)
 convNonLin = 'relu'
+
+def relu(input):
+    output = T.maximum(0., input)
+    return output
     
 def activation(input, key):
     ''' 
@@ -12,7 +16,7 @@ def activation(input, key):
     '''
     identity = lambda x: x    
     activFun = {'lin':  identity,
-                'relu': T.nnet.relu,
+                'relu': relu,
                 'elu':  T.nnet.elu,
                 'tanh': T.tanh, 
                 'sig':  T.nnet.sigmoid, 
