@@ -7,7 +7,7 @@ from models.layers.activations import weight_multiplier
 convNonLin = 'relu'
 
 
-def t1_shared(params, rng, index, nIn, nOut, outFilters, filterShape=0, defineW=1):
+def t1_shared(params, rng, index, nIn, nOut, outFilters=7, filterShape=0, defineW=True):
 
     ''' Initializing T1 shared variables.
     
@@ -41,7 +41,7 @@ def t1_shared(params, rng, index, nIn, nOut, outFilters, filterShape=0, defineW=
     return W, b, a
 
 
-def t2_shared(params, globalParams, index, inFilters, outFilters, filterShape):
+def t2_shared(params, globalParams, index, inFilters, outFilters, filterShape=0):
 
     ''' Initializing T2 shared variables.
     

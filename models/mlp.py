@@ -110,24 +110,36 @@ class mlp(object):
         self.guessLabel2 = T.argmax(self.y2, axis=1)
 
         # cost functions
-        def stable(inp, stabilize=True):
+        def stable(x, stabilize=True):
             if stabilize:
-                inp = T.where(T.isnan(inp), 1000., inp)
-                inp = T.where(T.isinf(inp), 1000., inp)
-            return inp
+                x = T.where(T.isnan(x), 1000., x)
+                x = T.where(T.isinf(x), 1000., x)
+            return x
 
         if params.cost == 'categorical_crossentropy':
             def costFun1(y, label):
                 return stable(-T.log(y[T.arange(label.shape[0]), label]),
-                              stabilize=False)
+                              stabilize=True)
         else:
             raise NotImplementedError
-        if params.cost_T2 in ['crossEntropy', 'sigmoidal', 'hingeLoss']:
+        if params.cost_T2 in ['categorical_crossentropy', 'sigmoidal', 'hingeLoss']:
             def costFun2(y, label):
                 return stable(-T.log(y[T.arange(label.shape[0]), label]),
-                              stabilize=False)
+                              stabilize=True)
         else:
             raise NotImplementedError
+#        if params.cost == 'categorical_crossentropy': DOES NOT WORK
+#            def costFun1(y, label):
+#                return T.nnet.categorical_crossentropy(y, label)
+#        else:
+#            raise NotImplementedError
+#        if params.cost_T2 in ['categorical_crossentropy', 'sigmoidal', 'hingeLoss']:
+#            def costFun2(y, label):
+#                return T.nnet.categorical_crossentropy(y, label)
+#        else:
+#            raise NotImplementedError
+
+
 
         def costFunT1(*args, **kwargs):
             return T.mean(costFun1(*args, **kwargs))
