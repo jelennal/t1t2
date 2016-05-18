@@ -5,16 +5,36 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 import numpy as np
 import theano.tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
+import theano.sandbox.rng_mrg
 import theano
 
-#from theano.compile.nanguardmode import NanGuardMode
 theano.config.exception_verbosity = 'high'
-theano.config.optimizer = 'fast_compile'
 theano.config.floatX = 'float32'
 theano.warn_foat64 = 'warn'
+#theano.config.optimizer = 'fast_compile' # ALT: 'fast_run'import the
 
 # run with: CUDA_LAUNCH_BLOCKING=1 python
 #theano.config.profile = True
+#from theano.compile.nanguardmode import NanGuardMode  # mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True)
+
+def detect_nan(i, node, fn):
+    for output in fn.outputs:
+        if (not isinstance(output[0], np.random.RandomState) and
+                (np.isnan(output[0]).any() or np.isinf(output[0]).any()) and
+                not (hasattr(node, 'op') and isinstance(node.op, theano.sandbox.rng_mrg.GPU_mrg_uniform))):
+            print('*** NaN detected ***')
+            theano.printing.debugprint(node)
+            print(type(node), node.op, type(node.op))
+            print('Inputs : %s' % [input[0] for input in fn.inputs])
+            print'Input shape',  [input[0].shape for input in fn.inputs]
+            print('Outputs: %s' % [output[0] for output in fn.outputs])
+            print'Output shape',  [output[0].shape for output in fn.outputs]
+            print 'NaN # :', [np.sum(np.isnan(output[0])) for output in fn.outputs]  
+            print 'Inf # :', [np.sum(np.isinf(output[0])) for output in fn.outputs]  
+            print 'NaN location: ', np.isnan(output[0]), ', Inf location: ', np.argwhere(np.isinf(output[0]))            
+            import pdb; pdb.set_trace()
+            raise ValueError
+
 
 '''     
     Setup the model and train it!
@@ -40,7 +60,7 @@ def run_exp(replace_params={}):
     
     # random numbers            
     rng = np.random.RandomState(params.seed)
-    rstream = RandomStreams(rng.randint(params.seed+1))
+    rstream = RandomStreams(rng.randint(params.seed+1)+1)
 
     ''' 
         Construct Theano functions
@@ -78,26 +98,31 @@ def run_exp(replace_params={}):
     if params.batchNorm:
         for param, up in zip(model.paramsBN, model.updateBN):
             updateBN += [(param, up)] 
-            
-    # THEANO FUNCTIONS 
+                        
     updateT1T2 = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph, phase],
         outputs = [model.classError1, model.guessLabel1, model.classError2, model.guessLabel2] + grads,
         updates = updateT1 + updateT2 + updateBN,
         on_unused_input='ignore',
+#        mode=theano.compile.MonitorMode(post_func=detect_nan),    
+#        mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),        
         allow_input_downcast=True)
 
-    updateT1 = theano.function(
+    updateT1only = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph, phase],
         outputs = [model.classError1, model.guessLabel1] + grads,
         updates = updateT1 + updateBN,
         on_unused_input='ignore',
+#        mode=theano.compile.MonitorMode(post_func=detect_nan),        
+#        mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),        
         allow_input_downcast=True)
 
     evaluate = theano.function(
         inputs = [x1, x2, trueLabel1, trueLabel2, graph],
         outputs = [model.classError2, model.guessLabel2, model.y2, model.penalty, model.netStats],
         on_unused_input='ignore',
+#        mode=theano.compile.MonitorMode(post_func=detect_nan),                
+#        mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),        
         allow_input_downcast=True)        
 
     ''' 
@@ -208,8 +233,8 @@ def run_exp(replace_params={}):
                 sampleIndex2 = train2Perm[(currentT2Batch * params.batchSize2):
                                         ((currentT2Batch + 1) * (params.batchSize2))]                
                 
-                if ((i+1) % params.T1perT2 ==  0) and ( i >= params.triggerT2):
-
+                if (i % params.T1perT2 ==  0) and ( i >= params.triggerT2):
+                
                    res = updateT1T2(t1Data[sampleIndex1], t2Data[sampleIndex2],
                                t1Label[sampleIndex1], t2Label[sampleIndex2],
                                lr1, lr2, moment1, moment2, 0, 0)
@@ -217,29 +242,31 @@ def run_exp(replace_params={}):
                    tempError2 += [1.*sum(t2Label[sampleIndex2] != y2) / params.batchSize2]
                    tempCost2 += [c2]
                    currentT2Batch += 1                       
+                   if True in np.isnan(debugs): print 'NANS'
 
                 else:                   
-                   res = updateT1(t1Data[sampleIndex1], t2Data[sampleIndex2],
+                   res = updateT1only(t1Data[sampleIndex1], t2Data[sampleIndex2],
                                t1Label[sampleIndex1], t2Label[sampleIndex2],
-                               lr1, 0, moment1, 1, 0, 0)                               
+                               lr1, 0., moment1, 1., 0, 0)                               
                    (c1, y1, debugs) = (res[0], res[1], res[2:])
                 
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]                                   
                 tempCost1 += [c1]
-                # if True in np.isnan(debugs): print 'NANS'
+                if True in np.isnan(debugs): print 'NANS'
             
             # Update T1 only 
             else: 
                 # make batch
                 sampleIndex1 = train1Perm[(currentBatch * params.batchSize1):
                                           ((currentBatch + 1) * (params.batchSize1))]
-                res = updateT1(t1Data[sampleIndex1], t1Data[0:0],
-                               t1Label[sampleIndex1], t1Label[0:0],
-                               lr1, 0, moment1, 1, 0, 0)
+                res = updateT1only(t1Data[sampleIndex1], t1Data[sampleIndex1],# t1Data[0:0],
+                               t1Label[sampleIndex1], t1Label[sampleIndex1], #t1Label[0:0],
+                               lr1, 0., moment1, 1., 0, 0)
                 (c1, y1, debugs) = (res[0], res[1], res[2:])
                 
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]
                 tempCost1 += [c1]
+                if True in np.isnan(debugs) or True in np.isnan(y1): print 'NANS', c1
 
 
             '''
@@ -252,7 +279,7 @@ def run_exp(replace_params={}):
                 if (params.batchNorm and (currentEpoch > 1)) \
                    and ((currentEpoch % params.evaluateTestInterval) == 0 or i == (params.maxEpoch*nBatches1 - 1)) \
                    and params.testBN != 'lazy':
-                       model = update_bn(model, params, updateT1, t1Data, t1Label)    
+                       model = update_bn(model, params, updateT1only, t1Data, t1Label)    
                      
 #                # EVALUATE: validation set
 #                allVar = evaluate(vData[:2], vData, vLabel[:2], vLabel, 1)
@@ -273,7 +300,7 @@ def run_exp(replace_params={}):
                     nTempSamples = 2000                           
                 tempError = 0.; tempCost = 0.; batchSizeT = nTestSamples / 10
                 dummyD = testD[:2]; dummyL = testL[:2]
-                if params.useT2 and currentEpoch < 0.8*params.maxEpoch:
+                if currentEpoch < 0.8*params.maxEpoch:
                     np.random.shuffle(testPerm)
                     tempIndex = testPerm[:nTempSamples]
                     cT, yTest, _ , p, stats = evaluate(dummyD, testD[tempIndex], dummyL, testL[tempIndex], 1)
@@ -329,14 +356,9 @@ def run_exp(replace_params={}):
                     print currentEpoch, ') time=%.f     T1 | T2 | test | penalty ' % ((time() - t_start)/60)
                     
                     print 'ERR    %.3f | %.3f | %.3f | - ' % (
-                        t1Error[-1]*100,
-                        t2Error[-1]*100,
-                        testError[-1]*100)
+                        t1Error[-1]*100, t2Error[-1]*100, testError[-1]*100)
                     print 'COSTS   %.3f | %.3f | %.3f | %.3f ' % (
-                        t1Cost[-1],
-                        t2Cost[-1],
-                        testCost[-1],
-                        penaltyCost[-1])
+                        t1Cost[-1], t2Cost[-1], testCost[-1], penaltyCost[-1])
 
                     print 'Log[learningRates] ', np.log10(lr1), 'T1 ', np.log10(lr2), 'T2'                        
                     for param in params.rglrzTrain:
