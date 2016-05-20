@@ -5,7 +5,7 @@ import theano.tensor as T
 import theano.tensor.nnet.bn as bn
 from theano.ifelse import ifelse
 
-eps = 1e-8
+eps = np.float32(1e-6)
 zero = np.float32(0.)
 one = np.float32(1.)
 
@@ -18,6 +18,10 @@ def bn_shared(params, outFilters, index):
     template = np.ones((outFilters,), dtype=theano.config.floatX)
     normParam['mean'] = theano.shared(value=0.*template, name='mean_%d' % (index), borrow=True)
     normParam['var'] = theano.shared(value=1.*template, name='var_%d' % (index), borrow=True)                                
+    normParam['mean_batch'] = theano.shared(value=0.*template, name='mean_batch_%d' % (index), borrow=True) # need for exact 
+    normParam['var_batch'] = theano.shared(value=1.*template, name='var_batch_%d' % (index), borrow=True) # need for exact                               
+
+
     normParam['iter'] = theano.shared(np.float32(1.), name='iter')                 
 
     return normParam
@@ -50,8 +54,8 @@ def bn_layer(input, a, b, normParam, params, splitPoint, graph):
     var1 = ifelse(T.eq(graph, 3), normParam['var'], var1)         
 
     # moving average as a proxi for validation model 
-    mean2 = (1-alpha)*normParam['mean'] + alpha*mean1 
-    var2 = (1-alpha)*normParam['var'] + alpha*var1   
+    mean2 = (1.-alpha)*normParam['mean'] + alpha*mean1 
+    var2 = (1.-alpha)*normParam['var'] + alpha*var1   
 
     # apply transformation: 
     # on the side of T1 stream, use T1 stats; on the side of T2 stream, use running average of T1 stats
@@ -60,21 +64,17 @@ def bn_layer(input, a, b, normParam, params, splitPoint, graph):
         input = T.set_subtensor(input[:splitPoint], bn.batch_normalization(input[:splitPoint], 
                                 a.dimshuffle('x', 0, 'x', 'x'), b.dimshuffle('x', 0, 'x', 'x'), 
                                 mean1.dimshuffle('x', 0, 'x', 'x'), std1.dimshuffle('x', 0, 'x', 'x'), 
-                                mode='low_mem'))  # mode='high_mem'
+                                mode='high_mem'))  # mode='high_mem'
         input = T.set_subtensor(input[splitPoint:], bn.batch_normalization(input[splitPoint:], 
                                 a.dimshuffle('x', 0, 'x', 'x'), b.dimshuffle('x', 0, 'x', 'x'), 
                                 mean2.dimshuffle('x', 0, 'x', 'x'), std2.dimshuffle('x', 0, 'x', 'x'),                    
-                                mode='low_mem'))  # mode='high_mem'                            
-    else:    
-        input = T.set_subtensor(input[:splitPoint], bn.batch_normalization(input[:splitPoint], a, b, mean1, std1)) # mode='high_mem'
-        input = T.set_subtensor(input[splitPoint:], bn.batch_normalization(input[splitPoint:], a, b, mean2, std2)) # mode='high_mem'                    
-
+                                mode='high_mem'))  # mode='high_mem'                            
         
     updateBN = [mean2, var2, normParam['iter']+iterStep]  
     return input, updateBN
 
 
-def update_bn(mlp, params, updateT1, t1Data, t1Label):
+def update_bn(mlp, params, updateT1only, t1Data, t1Label):
     
     ''' Computation of exact batch normalization parameters for the trained model (referred to test-BN).
 
@@ -110,34 +110,38 @@ def update_bn(mlp, params, updateT1, t1Data, t1Label):
     oldBN['var'] = map(lambda i: mlp.h[i].normParam['var'].get_value(), loopOver)                    
     newBN['mean'] = map(lambda i: 0.*oldBN['mean'][i], range(len(loopOver)))
     newBN['var'] = map(lambda i: 0.*oldBN['var'][i], range(len(loopOver)))
-                     
+    dummyInput = t1Data[:batchSizeBN]
+    dummyLabel = t1Label[:batchSizeBN]                     
 
     # CASE: 'proper' 
     if params.testBN == 'proper':
         
         # loop over layers, loop over examples
         for i in len(range(loopOver)):
+            layer =loopOver[i]
             for k in range(0, params.m):
                 sampleIndexBN = trainPermBN[(k * batchSizeBN):((k + 1) * (batchSizeBN))]
-                _ = updateT1(t1Data[sampleIndexBN], t1Data[0:0], t1Label[sampleIndexBN], t1Label[0:0], 0, 0, 0, 0, 3, 0)                         
+                _ = updateT1only(t1Data[sampleIndexBN], dummyInput, t1Label[sampleIndexBN], dummyLabel, 0, 0, 0, 0, 3, 0)                         
 
-                l =loopOver[i]
-                newBN['mean'][i] = mlp.h[l].normParam['mean'].get_value() + newBN['mean'][i]
-                newBN['var'][i] = mlp.h[l].normParam['var'].get_value() + newBN['var'][i]                   
-        np.random.shuffle(trainPermBN)
-        biasCorr = batchSizeBN/(batchSizeBN-1)                     
-        
-        # compute mean, adjust for biases
-        newBN['mean'][i] /= params.m
-        newBN['var'][i] *= biasCorr/params.m
+                newBN['mean'][i] = mlp.h[layer].normParam['mean'].get_value() + newBN['mean'][i]
+                newBN['var'][i] = mlp.h[layer].normParam['var'].get_value() + newBN['var'][i]                   
 
+            np.random.shuffle(trainPermBN)
+            biasCorr = batchSizeBN / (batchSizeBN-1)                     
+            # compute mean, adjust for biases
+            newBN['mean'][i] /= params.m
+            newBN['var'][i] *= biasCorr/params.m
+            # update shared, "correct" estimate of mean and bias
+            mlp.h[layer].normParam['mean'].set_value(newBN['mean'][i])
+            mlp.h[layer].normParam['var'].set_value(newBN['var'][i])
+     
     # CASE: 'default'                       
     elif params.testBN == 'default': 
         
         # loop over examples
         for k in range(0, params.m):
             sampleIndexBN = trainPermBN[(k * batchSizeBN):((k + 1) * (batchSizeBN))]
-            _ = updateT1(t1Data[sampleIndexBN], t1Data[0:0], t1Label[sampleIndexBN], t1Label[0:0], 0, 0, 0, 0, 2, 0)
+            _ = updateT1only(t1Data[sampleIndexBN], dummyInput, t1Label[sampleIndexBN], dummyLabel, 0, 0, 0, 0, 2, 0)
                         
             newBN['mean'] = map(lambda (i, j): mlp.h[i].normParam['mean'].get_value() + newBN['mean'][j], zip(loopOver, range(len(loopOver))))
             newBN['var'] = map(lambda (i, j): mlp.h[i].normParam['var'].get_value() + newBN['var'][j], zip(loopOver, range(len(loopOver))))                    
@@ -146,10 +150,9 @@ def update_bn(mlp, params, updateT1, t1Data, t1Label):
         biasCorr = batchSizeBN / (batchSizeBN-1)             
         newBN['var'] = map(lambda i: newBN['var'][i]*biasCorr/params.m, range(len(loopOver)))        
         newBN['mean'] = map(lambda i: newBN['mean'][i]/params.m, range(len(loopOver)))
-
-    # updating test-BN parameters, update shared
-    map(lambda (i,j): mlp.h[i].normParam['mean'].set_value(newBN['mean'][j]), zip(loopOver, range(len(loopOver))))
-    map(lambda (i,j): mlp.h[i].normParam['var'].set_value(newBN['var'][j]), zip(loopOver, range(len(loopOver))))
+        # updating test-BN parameters, update shared
+        map(lambda (i,j): mlp.h[i].normParam['mean'].set_value(newBN['mean'][j]), zip(loopOver, range(len(loopOver))))
+        map(lambda (i,j): mlp.h[i].normParam['var'].set_value(newBN['var'][j]), zip(loopOver, range(len(loopOver))))
 
     # printing an example of previous and updated versions of test-BN
     print 'BN samples: '
@@ -157,6 +160,135 @@ def update_bn(mlp, params, updateT1, t1Data, t1Label):
     print 'var low', oldBN['var'][1][0], newBN['var'][1][0]
     print 'mean up', oldBN['mean'][-1][0], newBN['mean'][-1][0]
     print 'var up', oldBN['var'][-1][0], newBN['var'][-1][0]
-
     
-    return mlp  
+    return mlp 
+    
+# ----------------------------------------------------------------------------- new
+
+#def bn_layer(input, a, b, normParam, params, phase):
+#
+#    ''' Apply BN.    
+#
+#    # phase = 0 : BN eval with m1v1, BN ups weighter average 
+#    # phase = 1 : BN eval with m2v2, no BN ups
+#
+#    '''
+#        
+#    minAlpha = params.movingAvMin
+#    iterStep = params.movingAvStep                  
+#    # compute mean & variance    
+#    if params.model == 'convnet':
+#        mean1 = T.mean(input, axis = (0, 2, 3))
+#        var1 = T.var(input, axis = (0, 2, 3))
+#    else:
+#        mean1 = T.mean(input, axis = 0)
+#        var1 = T.var(input, axis = 0)
+#
+#    # moving average as a proxi for validation model 
+#    alpha = (1.-phase)*T.maximum(minAlpha, 1./normParam['iter'])                     
+#    mean2 = (1.-alpha)*normParam['mean'] + alpha*mean1 
+#    var2 = (1.-alpha)*normParam['var'] + alpha*var1   
+#
+#    mean = (1.-phase)*mean2 + phase*mean1 
+#    var = (1.-phase)*var1 + phase*var1
+#    std = T.sqrt(var+eps)
+#
+#    # apply transformation: 
+#    if params.model == 'convnet':
+#        input = bn.batch_normalization(input, a.dimshuffle('x', 0, 'x', 'x'), b.dimshuffle('x', 0, 'x', 'x'), 
+#                                mean.dimshuffle('x', 0, 'x', 'x'), std.dimshuffle('x', 0, 'x', 'x'), mode='high_mem')
+#    else:    
+#        input = bn.batch_normalization(input, a, b, mean, std) 
+#    updateBN = [mean2, var2, mean1, var1, normParam['iter']+iterStep]  
+#    return input, updateBN
+#
+#
+#def update_bn(mlp, params, evaluateBN, t1Data, t1Label):
+#    
+#    ''' Computation of exact batch normalization parameters for the trained model (referred to test-BN).
+#
+#    Implemented are three ways to compute the BN parameters: 
+#        'lazy'      test-BN are approximated by a running average during training
+#        'default'   test-BN are computed by averaging over activations of params.m samples from training set 
+#        'proper'    test-BN of k-th layer are computed as in 'default', 
+#                    however the activations are recomputed by rerunning with test-BN params on all previous layers
+#
+#    If the setting is 'lazy', this function will not be called, since running average test-BN 
+#    are computed automatically during training.                
+#
+#    '''
+#    
+#    oldBN, newBN = [{}, {}]
+#    nSamples1 = t1Data.shape[0]
+#
+#    batchSizeBN = nSamples1/params.m    
+#    trainPermBN = range(0, nSamples1)
+#    np.random.shuffle(trainPermBN)
+#
+#
+#    # list of layers which utilize BN    
+#    if params.model == 'convnet':
+#        allLayers = params.convLayers
+#        loopOver = filter(lambda i: allLayers[i].bn, range(len(allLayers)))
+#        print loopOver
+#    else:
+#        loopOver = range(params.nLayers-1)
+#        
+#    # extract old test-BN parameters, reset new
+#    oldBN['mean'] = map(lambda i: mlp.h[i].normParam['mean'].get_value(), loopOver)
+#    oldBN['var'] = map(lambda i: mlp.h[i].normParam['var'].get_value(), loopOver)                    
+#    newBN['mean'] = map(lambda i: 0.*oldBN['mean'][i], range(len(loopOver)))
+#    newBN['var'] = map(lambda i: 0.*oldBN['var'][i], range(len(loopOver)))
+#
+#    # CASE: 'proper' 
+#    if params.testBN == 'proper':
+#        
+#        # loop over layers, loop over examples
+#        for i in len(range(loopOver)):
+#            layer = loopOver[i]
+#            for k in range(0, params.m):
+#                sampleIndexBN = trainPermBN[(k * batchSizeBN):((k + 1) * (batchSizeBN))]
+#                evaluateBN(t1Data[sampleIndexBN], 0, 1)                         
+#
+#                newBN['mean'][i] = mlp.h[layer].normParam['mean_batch'].get_value() + newBN['mean'][i]
+#                newBN['var'][i] = mlp.h[layer].normParam['var_batch'].get_value() + newBN['var'][i]                   
+#
+#            np.random.shuffle(trainPermBN)
+#            biasCorr = batchSizeBN / (batchSizeBN-1)                     
+#            # compute mean, adjust for biases
+#            newBN['mean'][i] /= params.m
+#            newBN['var'][i] *= biasCorr/params.m
+#            mlp.h[layer].normParam['mean'].set_value(newBN['mean'][i])
+#            mlp.h[layer].normParam['var'].set_value(newBN['var'][i])
+#        
+#
+#    # CASE: 'default'                       
+#    elif params.testBN == 'default': 
+#        
+#        # loop over examples
+#        for k in range(0, params.m):
+#            sampleIndexBN = trainPermBN[(k * batchSizeBN):((k + 1) * (batchSizeBN))]
+#            evaluateBN(t1Data[sampleIndexBN], 0, 0)
+#                        
+#            newBN['mean'] = map(lambda (i, j): mlp.h[i].normParam['mean_batch'].get_value() + newBN['mean'][j], zip(loopOver, range(len(loopOver))))
+#            newBN['var'] = map(lambda (i, j): mlp.h[i].normParam['var_batch'].get_value() + newBN['var'][j], zip(loopOver, range(len(loopOver))))                    
+#                    
+#        # compute mean, adjust for biases
+#        biasCorr = batchSizeBN / (batchSizeBN-1)             
+#        newBN['var'] = map(lambda i: newBN['var'][i]*biasCorr/params.m, range(len(loopOver)))        
+#        newBN['mean'] = map(lambda i: newBN['mean'][i]/params.m, range(len(loopOver)))
+#
+#        # updating test-BN parameters, update shared
+#        map(lambda (i,j): mlp.h[i].normParam['mean'].set_value(newBN['mean'][j]), zip(loopOver, range(len(loopOver))))
+#        map(lambda (i,j): mlp.h[i].normParam['var'].set_value(newBN['var'][j]), zip(loopOver, range(len(loopOver))))
+#
+#    # printing an example of previous and updated versions of test-BN
+#    print 'BN samples: '
+#    print 'mean low', oldBN['mean'][1][0], newBN['mean'][1][0]
+#    print 'var low', oldBN['var'][1][0], newBN['var'][1][0]
+#    print 'mean up', oldBN['mean'][-1][0], newBN['mean'][-1][0]
+#    print 'var up', oldBN['var'][-1][0], newBN['var'][-1][0]
+#    
+#    return mlp 
+#    
+#
