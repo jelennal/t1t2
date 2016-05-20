@@ -48,6 +48,16 @@ def lr_schedule(fun, var, halfLife, start):
         elif t>t2: return 0.01
         else: return 0.1    
 
+    def FourPhase(t):
+        t1 = 0.5
+        t2 = 0.7
+        t3 = 0.85
+        if t<t1: return 1.
+        elif t<t2: return 0.1
+        elif t<t3: return 0.01
+        else: return 0.001 
+
+
 
     Nothing = lambda t: 1.
     LinearVulgaris = lambda t: (1. - t)
@@ -73,7 +83,8 @@ def lr_schedule(fun, var, halfLife, start):
         'step': ZeroThenOne,
         'barier': HardZeroOneZero,
         'period': Periodic,
-        'exp3step': ThreePhase
+        'exp3step': ThreePhase,
+        'exp4step': FourPhase # shedule from all-conv paper 
     }[fun]
 
     return function(var)
