@@ -2,12 +2,17 @@ import numpy as np
 import theano
 import theano.tensor as T
 
-import theano.tensor.nnet.conv as nnconv
-from theano.tensor.signal import pool#downsample
+cudasConv = False
+
+if cudasConv:
+    import theano.sandbox.cuda.dnn as cudnn
+else:    
+    import theano.tensor.nnet as nnconv
+    from theano.tensor.signal import pool#downsample
 
 from models.layers.shared import t1_shared, t2_shared
 from models.layers.activations import activation
-from models.layers.noise import noise_conditions, noiseup, dropout
+from models.layers.noise import noise_conditions, noiseup, dropout_conditions, dropout
 from models.layers.batchnorm import bn_shared, bn_layer
 
 eps = 1e-8
@@ -17,11 +22,12 @@ convNonLin = 'relu'
 
 
 class conv_layer(object):
-   def __init__(self, rng, rstream, index, splitPoint, input, params, globalParams, graph,
+   def __init__(self, rng, rstream, index, x, 
+                params, globalParams, useRglrz, bnPhase,
                 filterShape, inFilters, outFilters, stride, 
                 W=None, b=None, a=None, rglrzParam=None, normParam=None, normWindow=None):
                     
-        ''' Class defining a convolutional layer.
+        ''' Class defining a convolutional layer. (bc01)
             # imageShape  ::  (0 batch size, 1 # in feature maps,         2 in image height, 3 in image width)  
             # filterShape ::  (0 # out feature maps, 1 # in feature maps, 2 filter height, 3 filter width)
         
@@ -38,6 +44,7 @@ class conv_layer(object):
         ''' 
             Defining shared variables: T1, T2, BN
         '''
+                
                 
         # defining shared T1 params
         if W is None:
@@ -64,51 +71,61 @@ class conv_layer(object):
         #  defining shared BN params
         if params.batchNorm and params.convLayers[index].bn:          
             if normParam is None: 
-                normParam = bn_shared(params, outFilters, index)                       
+                normParam, paramsBN = bn_shared(params, outFilters, index)                       
             self.normParam = normParam         
-            self.paramsBN = [normParam['mean'], normParam['var'], normParam['iter']]
+            self.paramsBN = paramsBN
 
         # noise      
         if (index == 0 and 'inputNoise' in rglrzParam.keys()):
             noiz = self.rglrzParam['inputNoise']
         elif 'addNoise' in rglrzParam.keys():
             noiz = self.rglrzParam['addNoise']
+        if ('dropOut' in rglrzParam.keys()):
+            drop = self.rglrzParam['dropOut']
+        elif 'dropOutB' in rglrzParam.keys():
+            drop = self.rglrzParam['dropOutB']
 
         ''' 
-            Input transformations: convolution, BN, noise, nonlinearity  
+            x transformations: convolution, BN, noise, nonlinearity  
         '''
 
         # add gauss noise before affine transform                 
         if noise_conditions(params, index, 'type0'):
-            input = noiseup(input, splitPoint, noiz, params.noiseT1, params, index, rstream)
+            x = noiseup(x, useRglrz, noiz, params.noiseT1, params, index, rstream)
+        if dropout_conditions(params, index, 'type0'):
+            x = dropout(x, useRglrz, drop, params, inFilters, rstream)
 
         # convolution
-        convOut = nnconv.conv2d(input, self.W, subsample = stride, 
-                                     border_mode = params.convLayers[index].border)
+        if cudasConv:
+            convOut = cudnn.dnn_conv(x, self.W, border_mode = params.convLayers[index].border, subsample = stride)
+        else: 
+            convOut = nnconv.conv2d(x, self.W, subsample = stride, border_mode = params.convLayers[index].border)
+
 
         # batch normalization & scale+shift   
         if params.batchNorm and params.convLayers[index].bn:
-            convOut, updateBN = bn_layer(convOut, self.a, self.b, self.normParam, params, splitPoint, graph)
+            convOut, updateBN = bn_layer(convOut, self.a, self.b, self.normParam, params, bnPhase)
             self.updateBN = updateBN 
         else:
             convOut += self.b.dimshuffle('x', 0, 'x', 'x') 
 
         # add gauss noise before nonlinearity         
         if noise_conditions(params, index, 'type1'): 
-            convOut = noiseup(convOut, splitPoint, noiz, params.noiseT1, params, index, rstream)        
+            convOut = noiseup(convOut, useRglrz, noiz, params.noiseT1, params, index, rstream)        
         # nonlinearity
         self.output = activation(convOut, convNonLin)
      
                               
-class pool_layer(object):
-   def __init__(self, rstream, input, params, index, splitPoint, graph,
-               poolShape, inFilters, outFilters, stride, ignore_border = False, 
-               b=None, a=None, normParam=None, rglrzParam=None):
+class pool_layer(object):        
+    def __init__(self, rstream, index, x, 
+                params, useRglrz, bnPhase,
+                poolShape, inFilters, outFilters, stride, ignore_border = False, 
+                b=None, a=None, normParam=None, rglrzParam=None):
 
         ''' 
             Pooling layer + BN + noise 
         '''        
-        # noise
+        # additive noise
         self.paramsT2 = []
         if 'addNoise' in params.rglrz and params.convLayers[index].noise:
 
@@ -121,15 +138,25 @@ class pool_layer(object):
             if params.useT2 and 'addNoise' in params.rglrzTrain:
                 self.paramsT2 = [noizParam]
                 
-            input = noiseup(input, splitPoint, noizParam, params.noiseT1, params, index, rstream)
+            x = noiseup(x, useRglrz, noizParam, params.noiseT1, params, index, rstream)
 
-        #  pooling          
-        self.output = pool.pool_2d(input, ds = poolShape, st = stride, 
-                                            ignore_border = ignore_border, mode = 'max')                                                                                                
+        # dropout            
+        if dropout_conditions(params, index, 'type0') and params.convLayers[index].noise:
+            if ('dropOut' in params.rglrz):
+                drop = self.rglrzInitial['dropOut'][index]
+            elif 'dropOutB' in rglrzParam.keys():
+                drop = self.rglrzInitial['dropOutB'][index]
+            x = dropout(x, useRglrz, drop, params, inFilters, rstream)
 
-        # batch normalization
-        if params.batchNorm and params.convLayers[index].bn:    
             
+        #  pooling          
+        if cudasConv:
+            self.output = cudnn.dnn_pool(x, poolShape, stride = stride, mode = 'max')#, ignore_border = ignore_border)                                                                                                
+        else:
+            self.output = pool.pool_2d(x, ds = poolShape, st = stride, ignore_border = ignore_border, mode = 'max')                                                                                                
+            
+        # batch normalization
+        if params.batchNorm and params.convLayers[index].bn:                
             _, b, a = t1_shared(params=params, rng=0, index=index, nIn=0, nOut=0, 
                                 outFilters=outFilters, filterShape=0, defineW=0) 
 
@@ -140,17 +167,19 @@ class pool_layer(object):
                 self.paramsT1 = [b]
                                 
             if normParam is None: 
-                normParam = bn_shared(params, outFilters, index)                                 
+                normParam, paramsBN = bn_shared(params, outFilters, index)                                 
             self.normParam = normParam         
-            self.paramsBN = [normParam['mean'], normParam['var'], normParam['iter']]
-            self.output, updateBN = bn_layer(self.output, self.a, self.b, self.normParam, params, splitPoint, graph)
+            self.paramsBN = paramsBN
+            self.output, updateBN = bn_layer(self.output, self.a, self.b, self.normParam, params, bnPhase)
             self.updateBN = updateBN
                                                                                    
                                                                                    
 class average_layer(object):
-    def __init__(self, rstream, input, params, index, splitPoint, graph,
-                 poolShape, inFilters, outFilters, stride, ignore_border = False, 
-                 b=None, a=None, normParam=None, rglrzParam=None):
+    def __init__(self, rstream, index, x, 
+                params, useRglrz, bnPhase,
+                poolShape, inFilters, outFilters, stride, ignore_border = False, 
+                b=None, a=None, normParam=None, rglrzParam=None):
+    
         ''' 
             Averaging layer + BN + noise 
         '''                
@@ -166,15 +195,16 @@ class average_layer(object):
             if params.useT2 and 'addNoise' in params.rglrzTrain:
                 self.paramsT2 = [noizParam]
             #self.output = noiseup(self.output, splitPoint, noizParam, params.noiseT1, params, index, rstream)
-            input = noiseup(input, splitPoint, noizParam, params.noiseT1, params, index, rstream)
+            x = noiseup(x, useRglrz, noizParam, params.noiseT1, params, index, rstream)
 
         # averaging
-        self.output = pool.pool_2d(input, ds = poolShape, st = stride, 
-                                             ignore_border = ignore_border, mode = 'average_exc_pad')
+        if cudasConv:
+            self.output = cudnn.dnn_pool(x, poolShape, stride = stride, mode = 'average_exc_pad')#, ignore_border = ignore_border)                                                                                                
+        else:   
+            self.output = pool.pool_2d(x, ds = poolShape, st = stride, ignore_border = ignore_border, mode = 'average_exc_pad')
 
         # if batch normalization                                             
-        if params.batchNorm and params.convLayers[index].bn:            
-            
+        if params.batchNorm and params.convLayers[index].bn:                        
             _, b, a = t1_shared(params=params, rng=0, index=index, nIn=0, nOut=0, 
                                 outFilters=outFilters, filterShape=0, defineW=0) 
 
@@ -182,10 +212,10 @@ class average_layer(object):
             self.paramsT1 = [b]
                         
             if normParam is None: 
-                normParam = bn_shared(params, outFilters, index)                                                  
+                normParam, paramsBN = bn_shared(params, outFilters, index)                                                  
             self.normParam = normParam         
-            self.paramsBN = [normParam['mean'], normParam['var'], normParam['iter']]
-            self.output, updateBN = bn_layer(self.output, self.a, self.b, self.normParam, params, splitPoint, graph)
+            self.paramsBN = paramsBN
+            self.output, updateBN = bn_layer(self.output, self.a, self.b, self.normParam, params, bnPhase)
             self.updateBN = updateBN 
       
         # flattening and softmax 

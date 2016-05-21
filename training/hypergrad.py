@@ -1,8 +1,9 @@
 import theano.tensor as T
+# TODO: more robust implementation: address problems with Lop 
 
-# hyper-params depending only on penalty cost and weights
+# hypers influencing only penalty term (cause Theano)
 penalList = ['L1', 'L2', 'Lmax', 'LmaxSlope', 'LmaxCutoff', 'LmaxHard'] 
-# hyperparameters depending only on classification cost
+# hypers influencing only NLL (cause Theano)
 noizList = ['addNoise', 'inputNoise'] 
 
 def hypergrad(paramsT1, paramsT2, gradC2T1, c1, c2, p1=0., p2=0.):
@@ -33,7 +34,7 @@ def hypergrad(paramsT1, paramsT2, gradC2T1, c1, c2, p1=0., p2=0.):
         elif rglrzType in noizList:
             rglrzNoiz += [rglrz]
         else:
-            print 'Hypergradient not implemented for ', rglrzType
+            print 'Hypergrad not implemented for ', rglrzType
 
     # separate weight parameters and gradients
     for (param, grad) in zip(paramsT1, gradC2T1):

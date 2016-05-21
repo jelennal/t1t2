@@ -72,7 +72,7 @@ def update_fun(param, grad, dataset, history, opt, learnParams, params):
     return updates, trackGrads, adamGrad
 
 
-def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase):
+def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2):
     
     ''' 
         Computing updates of T1 and T2 parameters.
@@ -92,58 +92,77 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
     '''    
 
     # gradients
-    cost1 = mlp.classError1 + mlp.penalty
-    cost2 = mlp.classError2
+    cost1 = mlp.trainCost + mlp.penalty
+    cost2 = mlp.trainCost
+
     # dC1/dT1
     gradC1T1 = T.grad(cost1, mlp.paramsT1)
-    gradC2T1 = T.grad(cost2, mlp.paramsT1)
-    
+    gradC2T1temp = T.grad(cost2, mlp.paramsT1)
+        
     # initialzations    
     opt1 = adam() if params.opt1 in ['adam'] else None
     opt2 = adam() if params.opt2 in ['adam'] else None
     updateT1 = [] if opt1 is None else opt1.initial_updates()
     updateT2 = [] if opt2 is None else opt2.initial_updates() 
 
-    gradC2T2 = []; tempUps = []
+    updateC2grad = []; gradC2T1 = []; gradC2T2 = []; tempUps = []
     trackT1grads = []; trackT2grads = []
     history = {'grad': dict(), 'up': dict()}
     historyC2 = {'grad': dict(), 'up': dict()}
 
     learnParams = [globalLR1, globalLR2, momentParam1, momentParam2]
 
-    ''' 
-        If gradient dC2/dT1 is also estimated with adam
-    '''
-    if params.avC2grad in ['adam', 'momentum'] and params.useT2:
-        
-            if params.avC2grad == 'adam': opt3 = adam()
-            else: opt3 = None
-            tempUps = [] if opt3 is None else opt3.initial_updates()
-    
-            newC2 = []
-            for param, grad in zip(mlp.paramsT1, gradC2T1):            
-                tempUp, _, newGrad = update_fun(param, T.reshape(grad, param.shape), 'T1', 
-                                                historyC2, opt3, learnParams, params)
-                tempUps += tempUp[:-1]
-                newC2 += newGrad
-            gradC2T1 = newC2
                    
     ''' 
         Updating T1 params
     '''
     for param, grad in zip(mlp.paramsT1, gradC1T1):                
+
             ups, track, _ = update_fun(param, grad, 'T1',
                                        history, opt1, learnParams, params)
             updateT1 += ups
             trackT1grads += [track]
 
+
+
     ''' 
         Updating T2 params
     '''
-    if params.useT2:        
+
+    if params.useT2:     
+
+
+        '''
+            Save grads C2T1 for the T2 update:
+        '''
+        for param, grad in zip(mlp.paramsT1, gradC2T1temp):                
+    
+                saveGrad = theano.shared(np.asarray(param.get_value() * 0., dtype='float32'),
+                                         broadcastable=param.broadcastable,
+                                         name='gradC2_%s' % param.name)
+                updateC2grad += [(saveGrad, grad)]                         
+                gradC2T1 += [saveGrad]
+
+        ''' 
+            If gradient dC2/dT1 is also estimated with adam
+        '''        
+        if params.avC2grad in ['adam', 'momentum']:
+                #gradC2T1 = T.grad(cost2, mlp.paramsT1)
+                if params.avC2grad == 'adam': opt3 = adam()
+                else: opt3 = None
+                tempUps = [] if opt3 is None else opt3.initial_updates()
+        
+                newC2 = []
+                for param, grad in zip(mlp.paramsT1, gradC2T1):            
+                    tempUp, _, newGrad = update_fun(param, T.reshape(grad, param.shape), 'T1', 
+                                                    historyC2, opt3, learnParams, params)
+                    tempUps += tempUp[:-1]
+                    newC2 += newGrad
+                gradC2T1 = newC2
+                
         
         paramsT2, gradC2T2 = hypergrad(mlp.paramsT1, mlp.paramsT2, gradC2T1, 
-                                       mlp.classError1, mlp.classError2, mlp.penalty)            
+                                       mlp.trainCost, mlp.trainCost, mlp.penalty)            
 
         for param, grad in zip(mlp.paramsT2, gradC2T2):
             paramName, _ = param.name.split('_')
@@ -166,6 +185,6 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2, phase
     print ", ".join([p.name for p in mlp.paramsT2]),
     print "are trained on T2"
 
-    return updateT1, updateT2+tempUps, debugs
+    return updateT1, updateT2+tempUps, updateC2grad, debugs
     
     
