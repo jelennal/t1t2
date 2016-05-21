@@ -9,25 +9,21 @@ from training.monitor import stat_monitor
 zero = theano.shared(value=0., borrow=True)
 
 class convnet(object):
-    def __init__(self, rng, rstream, input1, input2, wantOut1, wantOut2, params, graph, globalParams = None):
+    def __init__(self, rng, rstream, x, wantOut, params, useRglrz, bnPhase, globalParams = None):
         
         
         ''' Constructing the convolutional model.
         
         Arguments: 
             rng, rstream         :: random streams          
-            input1, input2       :: input batches from T1 and T2 set
+            x1, x2       :: x batches from T1 and T2 set
             wantOut1, wantOut2   :: corresponding labels  
             params               :: all model parameters
             graph                :: theano variable determining how are BN params computed
             globalParams         :: T2 params when one-per-network
        
         '''
-        
-        # concatenating input streams from T1 and T2 batches 
-        splitPoint = wantOut1.shape[0]
-        input = T.concatenate([input1, input2], axis=0)
-                    
+                            
         # defining shared variables shared across layers
         if globalParams is None:
             globalParams = {}            
@@ -60,18 +56,20 @@ class convnet(object):
             # construct layer
             print 'layer ', str(i), ':', layer.type, layer.filter, layer.maps, ' filters'  
             if layer.type == 'conv':
-                h.append(conv_layer(rng=rng, rstream=rstream, index=i, splitPoint=splitPoint, input=input,
-                                    params=params, globalParams=globalParams, graph=graph,
+                h.append(conv_layer(rng=rng, rstream=rstream, index=i, x=x,
+                                    params=params, globalParams=globalParams, useRglrz=useRglrz, bnPhase=bnPhase,
                                     filterShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=layer.stride))                
             elif layer.type == 'pool':
-                h.append(pool_layer(rstream=rstream, input=input, params=params, index=i, splitPoint=splitPoint, graph=graph,                      
+                h.append(pool_layer(rstream=rstream, index=i, x=x,  
+                                    params=params, useRglrz=useRglrz, bnPhase=bnPhase,                      
                                     poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=layer.stride))
             elif layer.type in ['average', 'average+softmax']:
-                h.append(average_layer(rstream=rstream, input=input, params=params, index=i, splitPoint=splitPoint, graph=graph,
-                                       poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=layer.stride))
-            elif layer.type == 'softmax':
-                h.append(mlp_layer(rng=rng, rstream=rstream, index=i, splitPoint=splitPoint, input=input,
-                                   params=params, globalParams=globalParams, graph=graph))
+                h.append(average_layer(rstream=rstream, index=i, x=x,  
+                                    params=params, useRglrz=useRglrz, bnPhase=bnPhase,                      
+                                    poolShape=layer.filter, inFilters=layer.maps[0], outFilters=layer.maps[1], stride=layer.stride))
+#            elif layer.type == 'softmax':
+#                h.append(mlp_layer(rng=rng, rstream=rstream, index=i, splitPoint=splitPoint, x=x,
+#                                   params=params, globalParams=globalParams, graph=graph))
 
             # collect penalty term
             if layer.type in ['conv', 'softmax'] and ('L2' in params.rglrz):                               
@@ -93,7 +91,7 @@ class convnet(object):
                 
             # collect T2 for tracking
             for param in params.rglrz:
-                if param == 'inputNoise':
+                if param == 'xNoise':
                     if i==0 and layer.noise:
                         trackT2Params[param] += [h[-1].rglrzParam[param]]                        
                     else:
@@ -114,10 +112,9 @@ class convnet(object):
                 paramsBN += h[-1].paramsBN
                 updateBN += h[-1].updateBN                
             
-            input = h[-1].output
+            x = h[-1].output
             i += 1                   
                                 
-
         # pack variables for output
         for rglrz in globalParams.keys():
             if rglrz in params.rglrzTrain:                
@@ -144,11 +141,8 @@ class convnet(object):
         self.guessLabel = T.argmax(self.y, axis=1)
         self.penalty = penalty if penalty != 0. else T.constant(0.)
 
-        # split the T1 and T2 batch streams
-        self.y1 = self.y[:splitPoint]
-        self.y2 = self.y[splitPoint:]
-        self.guessLabel1 = T.argmax(self.y1, axis=1)
-        self.guessLabel2 = T.argmax(self.y2, axis=1)
+        self.penalty = penalty if penalty != 0. else T.constant(0.)
+        self.guessLabel = T.argmax(self.y, axis=1)
 
         # cost functions
         def stable(x, stabilize=True):
@@ -174,10 +168,11 @@ class convnet(object):
             return T.mean(costFun1(*args, **kwargs))
         def costFunT2(*args, **kwargs):
             return T.mean(costFun2(*args, **kwargs))
-        self.y1_avg = self.y1
-        self.guessLabel1_avg = self.guessLabel1
+#        self.y1_avg = self.y1
+#        self.guessLabel1_avg = self.guessLabel1
 
-        # cost function
-        self.classError1 = costFunT1(self.y1, wantOut1)
-        self.classError2 = costFunT2(self.y2, wantOut2)
+ 
+#        self.trainCost = useRglrz*costFunT1(self.y, wantOut) + (1-useRglrz)*costFunT2(self.y, wantOut)
+        self.trainCost = costFunT1(self.y, wantOut)
+        self.classError = T.mean(T.neq(self.guessLabel, wantOut))    
 

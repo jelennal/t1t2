@@ -10,8 +10,9 @@ import theano
 
 theano.config.exception_verbosity = 'high'
 theano.config.floatX = 'float32'
-theano.warn_foat64 = 'warn'
+#theano.warn_foat64 = 'warn'
 #theano.config.optimizer = 'fast_compile' # ALT: 'fast_run'import the
+#theano.config.optimizer_including=cudnn
 
 # run with: CUDA_LAUNCH_BLOCKING=1 python
 #theano.config.profile = True
@@ -63,68 +64,76 @@ def run_exp(replace_params={}):
     rstream = RandomStreams(rng.randint(params.seed+1)+1)
 
     ''' 
-        Construct Theano functions
-        
+        Construct Theano functions        
+
     '''    
-    # INPUTS   
-    graph = T.iscalar('graph')
-    phase = T.iscalar('phase')
+    # INPUTS       
+    useRglrz = T.fscalar('useRglrz')
+    bnPhase = T.fscalar('bnPhase')
     if params.model == 'convnet':
-        x1 = T.ftensor4('x1')
-        x2 = T.ftensor4('x2')
+        x = T.ftensor4('x')
     else:
-        x1 = T.matrix('x1')
-        x2 = T.matrix('x2')
-    trueLabel1 = T.ivector('trueLabel1')
-    trueLabel2 = T.ivector('trueLabel2')
+        x = T.matrix('x')
+    trueLabel = T.ivector('trueLabel')
     globalLR1 = T.fscalar('globalLR1') 
     globalLR2 = T.fscalar('globalLR2') 
     moment1 = T.fscalar('moment1') 
-    moment2 = T.fscalar('moment2') 
+    moment2 = T.fscalar('moment2')                         
 
     # NETWORK
     if params.model == 'convnet':
-        model = convnet(rng=rng, rstream=rstream, input1=x1, input2=x2,
-                        wantOut1=trueLabel1, wantOut2=trueLabel2, params=params, graph=graph)
-    else:
-        model = mlp(rng=rng, rstream=rstream, input1=x1, input2=x2,
-                    wantOut1=trueLabel1, wantOut2=trueLabel2, params=params, graph=graph)
+        model = convnet(rng=rng, rstream=rstream, x=x, wantOut=trueLabel, 
+                        params=params, useRglrz=useRglrz, bnPhase=bnPhase)
+#    else:
+#        model = mlp(rng=rng, rstream=rstream, input1=x1, input2=x2,
+#                    wantOut1=trueLabel1, wantOut2=trueLabel2, params=params, graph=graph)
 
     # UPDATES
-    updateT1, updateT2, grads = updates(mlp=model, params=params,
-                                 globalLR1=globalLR1, globalLR2=globalLR2,
-                                 momentParam1=moment1, momentParam2=moment2, phase=phase)                                  
+    updateT1, updateT2, updateC2grad, grads = updates(mlp=model, params=params,
+                                                      globalLR1=globalLR1, globalLR2=globalLR2,
+                                                      momentParam1=moment1, momentParam2=moment2)                                  
     updateBN = []
     if params.batchNorm:
         for param, up in zip(model.paramsBN, model.updateBN):
             updateBN += [(param, up)] 
                         
-    updateT1T2 = theano.function(
-        inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph, phase],
-        outputs = [model.classError1, model.guessLabel1, model.classError2, model.guessLabel2] + grads,
-        updates = updateT1 + updateT2 + updateBN,
-        on_unused_input='ignore',
-#        mode=theano.compile.MonitorMode(post_func=detect_nan),    
-#        mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),        
-        allow_input_downcast=True)
 
-    updateT1only = theano.function(
-        inputs = [x1, x2, trueLabel1, trueLabel2, globalLR1, globalLR2, moment1, moment2, graph, phase],
-        outputs = [model.classError1, model.guessLabel1] + grads,
+    updateT1 = theano.function(
+        inputs = [x, trueLabel, globalLR1, moment1, useRglrz, bnPhase],
+        outputs = [model.classError, model.guessLabel] + grads,
         updates = updateT1 + updateBN,
         on_unused_input='ignore',
-#        mode=theano.compile.MonitorMode(post_func=detect_nan),        
-#        mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),        
+        allow_input_downcast=True)
+
+    updateT2part1 = theano.function(
+        inputs = [x, trueLabel, globalLR1, moment1, useRglrz, bnPhase],
+        outputs = [model.classError, model.guessLabel] + grads,
+        updates = updateC2grad,
+        on_unused_input='ignore',
+        allow_input_downcast=True)
+
+    updateT2part2 = theano.function(
+        inputs = [x, trueLabel, globalLR2, moment2, useRglrz, bnPhase],
+        outputs = [model.classError, model.guessLabel] + grads,
+        updates = updateT2,
+        on_unused_input='ignore',
         allow_input_downcast=True)
 
     evaluate = theano.function(
-        inputs = [x1, x2, trueLabel1, trueLabel2, graph],
-        outputs = [model.classError2, model.guessLabel2, model.y2, model.penalty, model.netStats],
+        inputs = [x, trueLabel, useRglrz, bnPhase],
+        outputs = [model.classError, model.guessLabel, model.y, model.penalty, model.netStats],
         on_unused_input='ignore',
 #        mode=theano.compile.MonitorMode(post_func=detect_nan),                
-#        mode=NanGuardMode(nan_is_error=True, inf_is_error=True, big_is_error=True),        
         allow_input_downcast=True)        
 
+    evaluateBN = theano.function(
+        inputs = [x, useRglrz, bnPhase],
+        updates = updateBN,
+        on_unused_input='ignore',
+#        mode=theano.compile.MonitorMode(post_func=detect_nan),                
+        allow_input_downcast=True)        
+
+               
     ''' 
         Inializations
         
@@ -235,19 +244,19 @@ def run_exp(replace_params={}):
                 
                 if (i % params.T1perT2 ==  0) and ( i >= params.triggerT2):
                 
-                   res = updateT1T2(t1Data[sampleIndex1], t2Data[sampleIndex2],
-                               t1Label[sampleIndex1], t2Label[sampleIndex2],
-                               lr1, lr2, moment1, moment2, 0, 0)
-                   (c1, y1, c2, y2, debugs) = (res[0], res[1], res[2], res[3], res[4:])   
+                   res = updateT2part1(t2Data[sampleIndex2], t2Label[sampleIndex2], lr1, moment1, 0, 1)                     
+                   (c2, y2, debugs) = (res[0], res[1], res[2:])   
+                   
+                   res = updateT2part2(t1Data[sampleIndex1], t1Label[sampleIndex1], lr2, moment2, 1, 0)  
+                   (c1, y1, debugs) = (res[0], res[1], res[2:])   
+ 
                    tempError2 += [1.*sum(t2Label[sampleIndex2] != y2) / params.batchSize2]
                    tempCost2 += [c2]
                    currentT2Batch += 1                       
                    if True in np.isnan(debugs): print 'NANS'
 
-                else:                   
-                   res = updateT1only(t1Data[sampleIndex1], t2Data[sampleIndex2],
-                               t1Label[sampleIndex1], t2Label[sampleIndex2],
-                               lr1, 0., moment1, 1., 0, 0)                               
+                else:        
+                   res = updateT1(t1Data[sampleIndex1], t1Label[sampleIndex1], lr1, moment1, 1, 0)                      
                    (c1, y1, debugs) = (res[0], res[1], res[2:])
                 
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]                                   
@@ -259,11 +268,10 @@ def run_exp(replace_params={}):
                 # make batch
                 sampleIndex1 = train1Perm[(currentBatch * params.batchSize1):
                                           ((currentBatch + 1) * (params.batchSize1))]
-                res = updateT1only(t1Data[sampleIndex1], t1Data[sampleIndex1],# t1Data[0:0],
-                               t1Label[sampleIndex1], t1Label[sampleIndex1], #t1Label[0:0],
-                               lr1, 0., moment1, 1., 0, 0)
+                res = updateT1(t1Data[sampleIndex1], t1Label[sampleIndex1], lr1, moment1, 1, 0)                      
                 (c1, y1, debugs) = (res[0], res[1], res[2:])
-                
+
+             
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]
                 tempCost1 += [c1]
                 if True in np.isnan(debugs) or True in np.isnan(y1): print 'NANS', c1
@@ -279,7 +287,7 @@ def run_exp(replace_params={}):
                 if (params.batchNorm and (currentEpoch > 1)) \
                    and ((currentEpoch % params.evaluateTestInterval) == 0 or i == (params.maxEpoch*nBatches1 - 1)) \
                    and params.testBN != 'lazy':
-                       model = update_bn(model, params, updateT1only, t1Data, t1Label)    
+                       model = update_bn(model, params, evaluateBN, t1Data, t1Label)    
                      
 #                # EVALUATE: validation set
 #                allVar = evaluate(vData[:2], vData, vLabel[:2], vLabel, 1)
@@ -299,15 +307,14 @@ def run_exp(replace_params={}):
                 else:
                     nTempSamples = 2000                           
                 tempError = 0.; tempCost = 0.; batchSizeT = nTestSamples / 10
-                dummyD = testD[:2]; dummyL = testL[:2]
                 if currentEpoch < 0.8*params.maxEpoch:
                     np.random.shuffle(testPerm)
                     tempIndex = testPerm[:nTempSamples]
-                    cT, yTest, _ , p, stats = evaluate(dummyD, testD[tempIndex], dummyL, testL[tempIndex], 1)
+                    cT, yTest, _ , p, stats = evaluate(testD[tempIndex], testL[tempIndex], 0, 1)
                     tempError = 1.*sum(yTest != testL[tempIndex]) / nTempSamples
                 else:                    
                     for i in range(10):
-                        cT, yTest, _, p, stats = evaluate(dummyD, testD[i*batchSizeT:(i+1)*batchSizeT], dummyL, testL[i*batchSizeT:(i+1)*batchSizeT], 1)
+                        cT, yTest, _ , p, stats = evaluate(testD[tempIndex], testL[tempIndex], 0, 1)
                         tempError += 1.*sum(yTest != testL[i*batchSizeT:(i+1)*batchSizeT]) / batchSizeT
                         tempCost += cT
                     tempError /= 10.                     
