@@ -17,18 +17,18 @@ def cnn_setup(params):
             self.noise = doNoise
             self.bn = doBN
             
-    cl1 = cnn_layer('conv', (3, 3), (3, 96),  (1, 1))
+    cl1 = cnn_layer('conv', (3, 3), (3, 96),  (1, 1), 'full')
     cl2 = cnn_layer('conv', (3, 3), (96, 96), (1, 1), 'full')
     cl3 = cnn_layer('pool', (3, 3), (96, 96), (2, 2), 'dummy', 1, 0) # dummy is not used
-    cl3alt = cnn_layer('conv', (3, 3), (96, 96), (2, 2)) # ? stride = 2?    
+    cl3alt = cnn_layer('conv', (3, 3), (96, 96), (2, 2), 'valid') # ? stride = 2?    
     
-    cl4 = cnn_layer('conv', (3, 3), (96, 192),  (1, 1))
+    cl4 = cnn_layer('conv', (3, 3), (96, 192),  (1, 1), 'full')
     cl5 = cnn_layer('conv', (3, 3), (192, 192), (1, 1), 'full')
     cl6 = cnn_layer('pool', (3, 3), (192, 192), (2, 2), 'dummy', 1, 0)
-    cl6alt = cnn_layer('conv', (3, 3), (192, 192), (2, 2)) # ? stride = 2?    
+    cl6alt = cnn_layer('conv', (3, 3), (192, 192), (2, 2),'valid') # ? stride = 2?    
  
-    cl8  = cnn_layer('conv', (3, 3), (192, 192), (1, 1))
-    cl9  = cnn_layer('conv', (1, 1), (192, 192), (1, 1))
+    cl8  = cnn_layer('conv', (3, 3), (192, 192), (1, 1), 'full')
+    cl9  = cnn_layer('conv', (1, 1), (192, 192), (1, 1), 'full')
     cl10 = cnn_layer('conv', (1, 1), (192, 10),  (1, 1), 'valid', 0, 0)
     cl11 = cnn_layer('average+softmax', (6, 6), (10, 10), (6, 6), 'dummy', 0, 0)
     
@@ -70,15 +70,15 @@ def setup(replace_params={}):
             self.T2isT1 = False                                                # sanity check: what if T2 is a subset of T1?
             # MODEL
             self.model = 'convnet'                                             # which model? 'mlp'/'convnet' TODO: more!
-            self.dataset = 'mnist'                                             # which dataset? 'mnist'/'svhn'/'cifar10' TODO: /'cfar100'/'not_mnist'
+            self.dataset = 'cifar10'                                             # which dataset? 'mnist'/'svhn'/'cifar10' TODO: /'cfar100'/'not_mnist'
             self.cnnType = 'all_conv'                                          #'defaulcd datast'/'all_conv'/''
             # PREPROCESSING
             self.ratioT2 = 1.                                                  # how much of validation set goes to T2? [0-1]
             self.ratioValid = 0.05                                             # how much of T2 goes to validatio set
-            self.preProcess = 'm0'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
+            self.preProcess = 'global_contrast_norm'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
             self.preContrast = 'None'                                          # nonlinear transform over input? 'None'/'tanh'/'arcsinh'/'sigmoid'
             # ARCHITECTURE
-            self.nHidden = [784, 1001, 802, 303, 10]                         # how many hidden units in each layer?
+            self.nHidden = [784, 1000, 1000, 1000, 10]                         # how many hidden units in each layer?
             self.activation = ['relu','relu', 'relu', 'softmax']               # what nonlinearities in each layer?                      
             self.nLayers = len(self.nHidden)-1                                 # how many layers are there? 
             # BATCH NORMALIZATION                                               
@@ -90,21 +90,21 @@ def setup(replace_params={}):
             self.m = 550                                                       # when computing "exact" BN parameters, average over how many samples from training set?
             self.testBN = 'default'                                            # when computing "exact" BN parameters, how? 'default'/'proper'/'lazy'
             # REGULARIZATION
-            self.rglrzTrain = ['addNoise', 'L2']                               # which rglrz are trained? (which are available? see: rglrzInitial)
-            self.rglrz = ['addNoise', 'L2']                                    # which rglrz are used? 
+            self.rglrzTrain = ['addNoise']                               # which rglrz are trained? (which are available? see: rglrzInitial)
+            self.rglrz = ['addNoise']                                    # which rglrz are used? 
             self.rglrzPerUnit = []                                             # which rglrz are defined per hidden unit? (default: defined one per layer) 
             self.rglrzPerMap = []                                              # which rglrz are defined per map? (for convnets)
             self.rglrzPerNetwork = []                                          # which rglrz are defined per network?
             self.rglrzPerNetwork1 = []                                         # which rglrz are defined per network? BUT have a separate param for the first layer      
             self.rglrzInitial = {'L1': 0.*ones,                                # initial values of rglrz 
-                                 'L2': 0.0001*ones,
+                                 'L2': 0.001*ones,
                          'LmaxCutoff': 0.*ones,                                # soft cutoff param1
                           'LmaxSlope': 0.*ones,                                # soft cutoff param2
                            'LmaxHard': 2.*ones,                                # hard cutoff aka maxnorm 
-                          'addNoise' : 0.1*ones, 
+                          'addNoise' : 0.*ones, 
                         'inputNoise' : [0.],                                   # only input noise (if trained, need be PerNetwork)
-                            'dropOut': [0.2, 0.5, 0.5, 0.5],
-                           'dropOutB': [0.2, 0.5, 0.5, 0.5]}                   # shared dropout pattern within batch
+                            'dropOut': [0.2]+20*[0.5],
+                           'dropOutB': [0.2]+20*[0.5]}                   # shared dropout pattern within batch
             self.rglrzLR = {'L1': 0.0001,                                      # scaling factor for learning rate: corresponds to hyperparameters (expected) order of magnitude
                             'L2': 0.001, 
                     'LmaxCutoff': 0.1, 
@@ -150,7 +150,7 @@ def setup(replace_params={}):
             self.seed = 1234
             # TRACKING, PRINTING
             self.trackPerEpoch = 1                                             # how often within epoch track error?
-            self.printInterval = 10                                             # how often print error?
+            self.printInterval = 5                                             # how often print error?
             self.printBest = 40000                                             # each updates print best value?
             self.activTrack = ['mean', 'std', 'max',                           # what network statistics are you following?
                                'const', 'spars', 
