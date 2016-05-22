@@ -4,10 +4,14 @@ import theano.tensor as T
 
 def noise_conditions(params, index, noiseWhere):
     doNoise = (('addNoise' in params.rglrz) or (index == 0 and 'inputNoise' in params.rglrz)) and params.noiseWhere == noiseWhere
+    if params.model == 'convnet':
+        doNoise = doNoise and params.convLayers[index].noise 
     return doNoise           
 
 def dropout_conditions(params, index, noiseWhere):
     doDrop = (('dropOut' in params.rglrz) or ('dropOutB' in params.rglrz))
+    if params.model == 'convnet':
+        doDrop = doDrop and params.convLayers[index].noise 
     return doDrop           
 
         

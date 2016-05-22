@@ -66,7 +66,8 @@ class conv_layer(object):
         if params.useT2:
             for rglrz in params.rglrzTrain:
                 if (rglrz not in params.rglrzPerNetwork) and (rglrz not in params.rglrzPerNetwork1):
-                        self.paramsT2 += [rglrzParam[rglrz]] # if trained, put param here
+                        if (rglrz not in ['inputNoise', 'addNoise']) or params.convLayers[index].noise:
+                            self.paramsT2 += [rglrzParam[rglrz]] # if trained, put param here
 
         #  defining shared BN params
         if params.batchNorm and params.convLayers[index].bn:          
