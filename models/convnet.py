@@ -174,5 +174,5 @@ class convnet(object):
  
 #        self.trainCost = useRglrz*costFunT1(self.y, wantOut) + (1-useRglrz)*costFunT2(self.y, wantOut)
         self.trainCost = costFunT1(self.y, wantOut)
-        self.classError = T.mean(T.neq(self.guessLabel, wantOut))    
+        self.classError = T.mean(T.cast(T.neq(self.guessLabel, wantOut), 'float32'))    
 

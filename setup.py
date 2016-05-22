@@ -75,7 +75,7 @@ def setup(replace_params={}):
             # PREPROCESSING
             self.ratioT2 = 1.                                                  # how much of validation set goes to T2? [0-1]
             self.ratioValid = 0.05                                             # how much of T2 goes to validatio set
-            self.preProcess = 'global_contrast_norm'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
+            self.preProcess = 'global_contrast_norm+zca'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
             self.preContrast = 'None'                                          # nonlinear transform over input? 'None'/'tanh'/'arcsinh'/'sigmoid'
             # ARCHITECTURE
             self.nHidden = [784, 1000, 1000, 1000, 10]                         # how many hidden units in each layer?
@@ -84,7 +84,7 @@ def setup(replace_params={}):
             # BATCH NORMALIZATION                                               
             self.batchNorm = True                                              # use batch normalization?
             self.aFix = True                                                   # fix scalling parameter?
-            self.movingAvMin = 0.15                                            # moving average paramerer? [0.05-0.20]
+            self.movingAvMin = 0.10                                            # moving average paramerer? [0.05-0.20]
             self.movingAvStep = 1                                              # moving average step size? 
             self.evaluateTestInterval = 25                                     # how often compute the "exact" BN parameters? i.e. replacing moving average with the estimate from the whole training data
             self.m = 550                                                       # when computing "exact" BN parameters, average over how many samples from training set?
@@ -128,11 +128,11 @@ def setup(replace_params={}):
             self.T2onlySGN = False                                             # consider only the sign for T2 update, not the amount
             # TRAINING: OPTIMIZATION
             self.learnRate1 = 0.001                                            # T1 max step size
-            self.learnRate2 = 0.01                                            # T2 max step size
+            self.learnRate2 = 0.001                                            # T2 max step size
             self.learnFun1 = 'lin'                                             # learning rate schedule for T1? (see LRFunctions for options)
             self.learnFun2 = 'lin'                                            # learning rate schedule for T2? 
             self.opt1 = 'adam'                                                 # optimizer for T1? 'adam'/None (None is SGD)
-            self.opt2 = None                                                 # optimizer for T2? 'adam'/None (None is SGD)
+            self.opt2 = 'adam'                                                 # optimizer for T2? 'adam'/None (None is SGD)
             self.use_momentum = False                                          # applies both to T1 and T2, set the terms to 0 for either if want to disable for one   
             self.momentum1 = [0.5, 0.9]                                        # T1 max and min momentum values
             self.momentum2 = [0.5, 0.9]                                        # T2 max and min momentum values
@@ -150,7 +150,7 @@ def setup(replace_params={}):
             self.seed = 1234
             # TRACKING, PRINTING
             self.trackPerEpoch = 1                                             # how often within epoch track error?
-            self.printInterval = 5                                             # how often print error?
+            self.printInterval = 10                                             # how often print error?
             self.printBest = 40000                                             # each updates print best value?
             self.activTrack = ['mean', 'std', 'max',                           # what network statistics are you following?
                                'const', 'spars', 
