@@ -140,8 +140,6 @@ class convnet(object):
         self.y = h[-1].output
         self.guessLabel = T.argmax(self.y, axis=1)
         self.penalty = penalty if penalty != 0. else T.constant(0.)
-
-        self.penalty = penalty if penalty != 0. else T.constant(0.)
         self.guessLabel = T.argmax(self.y, axis=1)
 
         # cost functions

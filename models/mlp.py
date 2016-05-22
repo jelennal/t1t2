@@ -6,22 +6,19 @@ from models.layers.mlp_layer import mlp_layer
 from training.monitor import stat_monitor
 
 class mlp(object):
-    def __init__(self, rng, rstream, input1, input2, wantOut1, wantOut2, params, graph, globalParams = None): # add cost
+    def __init__(self, rng, rstream, x, wantOut, params, useRglrz, bnPhase, globalParams = None):# add cost
 
         ''' Constructing the mlp model.
         
         Arguments: 
             rng, rstream         - random streams          
-            input1, input2       - input batches from T1 and T2 set
+            x1, x2       - x batches from T1 and T2 set
             wantOut1, wantOut2   - corresponding labels  
             params               - all model parameters
             graph                - theano variable determining how are BN params computed
             globalParams         - T2 params when one-per-network
        
         '''
-         # concatenating input streams from T1 and T2 batches 
-        splitPoint = wantOut1.shape[0]
-        input = T.concatenate([input1, input2], axis=0)
                     
         # defining shared variables shared across layers
         if globalParams is None:
@@ -49,9 +46,8 @@ class mlp(object):
         # CONSTRUCT NETWORK
         for i in range(0, params.nLayers):
             
-            h.append(mlp_layer(rng=rng, rstream=rstream, index=i,
-                                 splitPoint=splitPoint, input=input,
-                                 params=params, globalParams=globalParams, graph=graph))
+            h.append(mlp_layer(rng=rng, rstream=rstream, index=i, x=x,
+                               params=params, globalParams=globalParams, useRglrz=useRglrz, bnPhase=bnPhase))            
             # collect penalty terms
             if 'L2' in params.rglrz:
                 tempW = h[i].rglrzParam['L2'] * T.sqr(h[i].W)               
@@ -79,7 +75,7 @@ class mlp(object):
                 paramsBN += h[i].paramsBN
                 updateBN += h[i].updateBN
 
-            input = h[-1].output
+            x = h[-1].output
 
         # pack variables for output
         for rglrz in globalParams.keys():
@@ -102,12 +98,7 @@ class mlp(object):
         self.y = h[-1].output
         self.guessLabel = T.argmax(self.y, axis=1)
         self.penalty = penalty if penalty != 0. else T.constant(0.)
-
-        # split the T1 and T2 batch streams
-        self.y1 = self.y[:splitPoint]
-        self.y2 = self.y[splitPoint:]
-        self.guessLabel1 = T.argmax(self.y1, axis=1)
-        self.guessLabel2 = T.argmax(self.y2, axis=1)
+        self.guessLabel = T.argmax(self.y, axis=1)
 
         # cost functions
         def stable(x, stabilize=True):
@@ -128,27 +119,15 @@ class mlp(object):
                               stabilize=True)
         else:
             raise NotImplementedError
-#        if params.cost == 'categorical_crossentropy': DOES NOT WORK
-#            def costFun1(y, label):
-#                return T.nnet.categorical_crossentropy(y, label)
-#        else:
-#            raise NotImplementedError
-#        if params.cost_T2 in ['categorical_crossentropy', 'sigmoidal', 'hingeLoss']:
-#            def costFun2(y, label):
-#                return T.nnet.categorical_crossentropy(y, label)
-#        else:
-#            raise NotImplementedError
-
 
 
         def costFunT1(*args, **kwargs):
             return T.mean(costFun1(*args, **kwargs))
         def costFunT2(*args, **kwargs):
             return T.mean(costFun2(*args, **kwargs))
-        self.y1_avg = self.y1
-        self.guessLabel1_avg = self.guessLabel1
+#        self.y1_avg = self.y1
+#        self.guessLabel1_avg = self.guessLabel1
 
         # cost function
-        self.classError1 = costFunT1(self.y1, wantOut1)
-        self.classError2 = costFunT2(self.y2, wantOut2)
-        
+        self.trainCost = costFunT1(self.y, wantOut)
+        self.classError = T.mean(T.cast(T.neq(self.guessLabel, wantOut), 'float32'))    

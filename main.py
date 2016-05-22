@@ -84,9 +84,9 @@ def run_exp(replace_params={}):
     if params.model == 'convnet':
         model = convnet(rng=rng, rstream=rstream, x=x, wantOut=trueLabel, 
                         params=params, useRglrz=useRglrz, bnPhase=bnPhase)
-#    else:
-#        model = mlp(rng=rng, rstream=rstream, input1=x1, input2=x2,
-#                    wantOut1=trueLabel1, wantOut2=trueLabel2, params=params, graph=graph)
+    else:
+        model = mlp(rng=rng, rstream=rstream, x=x, wantOut=trueLabel,
+                    params=params, useRglrz=useRglrz, bnPhase=bnPhase)
 
     # UPDATES
     updateT1, updateT2, updateC2grad, grads = updates(mlp=model, params=params,
