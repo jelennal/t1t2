@@ -121,7 +121,7 @@ def run_exp(replace_params={}):
 
     evaluate = theano.function(
         inputs = [x, trueLabel, useRglrz, bnPhase],
-        outputs = [model.classError, model.guessLabel, model.y, model.penalty, model.netStats],
+        outputs = [model.classError, model.guessLabel, model.penalty, model.netStats],
         on_unused_input='ignore',
 #        mode=theano.compile.MonitorMode(post_func=detect_nan),                
         allow_input_downcast=True)        
@@ -310,12 +310,13 @@ def run_exp(replace_params={}):
                 if currentEpoch < 0.8*params.maxEpoch:
                     np.random.shuffle(testPerm)
                     tempIndex = testPerm[:nTempSamples]
-                    cT, yTest, _ , p, stats = evaluate(testD[tempIndex], testL[tempIndex], 0, 1)
+                    cT, yTest, p, stats = evaluate(testD[tempIndex], testL[tempIndex], 0, 1)
                     tempError = 1.*sum(yTest != testL[tempIndex]) / nTempSamples
                 else:                    
-                    for i in range(10):
-                        cT, yTest, _ , p, stats = evaluate(testD[tempIndex], testL[tempIndex], 0, 1)
-                        tempError += 1.*sum(yTest != testL[i*batchSizeT:(i+1)*batchSizeT]) / batchSizeT
+                    for j in range(10):
+                        tempIndex = testPerm[j*batchSizeT:(j+1)*batchSizeT]
+                        cT, yTest, p, stats = evaluate(testD[tempIndex], testL[tempIndex], 0, 1)
+                        tempError += 1.*sum(yTest != testL[tempIndex]) / batchSizeT
                         tempCost += cT
                     tempError /= 10.                     
                     cT = tempCost / 10.
