@@ -5,6 +5,88 @@ import os
 from sklearn import preprocessing
 import numpy as np
 from numpy.random import RandomState    
+import scipy
+        
+class ContrastNorm(object):
+    def __init__(self, scale=55, epsilon=1e-6):
+        self.scale = np.float64(scale)
+        self.epsilon = np.float64(epsilon)
+
+    def apply(self, data, copy=False):
+        if copy:
+            data = np.copy(data)
+        data_shape = data.shape
+        if len(data.shape) > 2:
+            data = data.reshape(data.shape[0], np.product(data.shape[1:]))
+        assert len(data.shape) == 2, 'Contrast norm on flattened data'
+#        assert np.min(data) >= 0.
+#        assert np.max(data) <= 1.
+        data -= data.mean(axis=1)[:, np.newaxis]
+        norms = np.sqrt(np.sum(data ** 2, axis=1)) / self.scale
+        norms[norms < self.epsilon] = self.epsilon
+        data /= norms[:, np.newaxis]
+        if data_shape != data.shape:
+            data = data.reshape(data_shape)
+        return data
+
+class ZCA(object):
+    def __init__(self, n_components=None, data=None, filter_bias=0.1):
+        self.filter_bias = np.float64(filter_bias)
+        self.P = None
+        self.P_inv = None
+        self.n_components = 0
+        self.is_fit = False
+        if n_components and data is not None:
+            self.fit(n_components, data)
+    def fit(self, n_components, data):
+        if len(data.shape) == 2:
+            self.reshape = None
+        else:
+            assert n_components == np.product(data.shape[1:]), \
+                'ZCA whitening components should be %d for convolutional data'\
+                % np.product(data.shape[1:])
+            self.reshape = data.shape[1:]
+        data = self._flatten_data(data)
+        assert len(data.shape) == 2
+        n, m = data.shape
+        self.mean = np.mean(data, axis=0)
+        bias_filter = self.filter_bias * np.identity(m, 'float64')
+        cov = np.cov(data, rowvar=0, bias=1) + bias_filter
+        eigs, eigv = np.linalg.eig(cov.astype(np.float64))
+        assert not np.isnan(eigs).any()
+        assert not np.isnan(eigv).any()
+        print 'eigenvals larger than bias', np.sum(eigs > 0.1)/3072.
+        print 'min eigenval: ', eigs.min(), 'max eigenval: ', eigs.max()
+        assert eigs.min() > 0
+        if self.n_components:
+            eigs = eigs[-self.n_components:]
+            eigv = eigv[:, -self.n_components:]
+        sqrt_eigs = np.sqrt(eigs)
+        self.P = np.dot(eigv * (1.0 / sqrt_eigs), eigv.T)
+        assert not np.isnan(self.P).any()
+        self.P_inv = np.dot(eigv * sqrt_eigs, eigv.T)
+        self.P = np.float32(self.P)
+        self.P_inv = np.float32(self.P_inv)
+        self.is_fit = True
+    def apply(self, data, remove_mean=True):
+        data = self._flatten_data(data)
+        d = data - self.mean if remove_mean else data
+        return self._reshape_data(np.dot(d, self.P))
+    def inv(self, data, add_mean=True):
+        d = np.dot(self._flatten_data(data), self.P_inv)
+        d += self.mean if add_mean else 0.
+        return self._reshape_data(d)
+    def _flatten_data(self, data):
+        if self.reshape is None:
+            return data
+        assert data.shape[1:] == self.reshape
+        return data.reshape(data.shape[0], np.product(data.shape[1:]))
+    def _reshape_data(self, data):
+        assert len(data.shape) == 2
+        if self.reshape is None:
+            return data
+        return np.reshape(data, (data.shape[0],) + self.reshape)
+        
         
 def store(item, name):
     
@@ -113,7 +195,7 @@ def gcn(data, params):
         Each image has mean zero and var one across its own pixels.   
         
     '''    
-    eps = 1e-8; lam = 0
+    eps = 1e-6; lam = 0
 
     gcn_data = []    
     for temp in data:
@@ -237,15 +319,34 @@ def read_preprocess(params):
     if preProcess in  ['global_contrast_norm', 'global_contrast_norm+zca', 'zca']:
         
         if not params.useT2: t2Data = t1Data[:5, :]
-        data = [t1Data, t2Data, testD, vData]        
+        #data = [t1Data, t2Data, testD, vData]
+        t1Data = t1Data.reshape(-1, 3, 32, 32)
+        t2Data  =  t2Data.reshape(-1, 3, 32, 32)
+        testD  =  testD.reshape(-1, 3, 32, 32)
+        t1Data.astype(dtype=np.float64); t2Data.astype(dtype=np.float64); testD.astype(dtype=np.float64)
+       
+        #print np.max(t1Data), np.max(t2Data), np.max(testD), ' shapes:', t1Data.shape, t2Data.shape, testD.shape
+        #print np.var(t1Data), np.var(t2Data), np.var(testD) 
+           
+        if preProcess in ['global_contrast_norm', 'global_contrast_norm+zca']:
+            gcn = ContrastNorm()
+            t1Data = gcn.apply(t1Data/np.float64(255.))
+            t2Data = gcn.apply(t2Data/np.float64(255.))
+            testD = gcn.apply(testD/np.float64(255.))
 
-        if preProcess != 'zca':
-            t1Data, t2Data, testD, vData = gcn(data, params)
-                        
-        if params.dataset == 'cifar10' and preProcess in ['global_contrast_norm+zca', 'zca']:
-            data = [t1Data, t2Data, testD, vData] 
-            t1Data, t2Data, testD, vData = zca_white(data, params)
+            #print np.max(t1Data), np.max(t2Data), np.max(testD), ' shapes:', t1Data.shape, t2Data.shape, testD.shape
+            #print np.var(t1Data), np.var(t2Data), np.var(testD) 
 
+           
+        if preProcess in ['zca', 'global_contrast_norm+zca']:                 
+            white = ZCA(3072, t1Data.copy())
+            t1Data = white.apply(t1Data)
+            t2Data = white.apply(t2Data)
+            testD = white.apply(testD)
+            
+            #print np.max(t1Data), np.max(t2Data), np.max(testD), ' shapes:', t1Data.shape, t2Data.shape, testD.shape
+            #print np.var(t1Data), np.var(t2Data), np.var(testD), 
+        
     # other kinds of preprocessing            
     else:         
         scaler = {
@@ -274,17 +375,6 @@ def read_preprocess(params):
        testD = contrastFun(testD)
 
 
-    # new data statistics 
-    print ' -data max, min, std'
-    print np.max(t1Data), np.min(t1Data)
-    print ' -data max std, min std'
-    print max(np.std(t1Data, axis = 0)), min(np.std(t1Data, axis = 0))
-    if params.useT2:
-        print np.max(t2Data), np.min(t2Data)        
-        print np.max(np.std(t2Data, axis = 0)), np.min(np.std(t2Data, axis = 0))
-
-    print ' -data max, min'
-
     print '- size T1, valid, T2'
     print t1Data.shape, vData.shape
     if params.useT2: print t2Data.shape
@@ -312,9 +402,14 @@ def read_preprocess(params):
                 t2Data = t2Data.reshape(-1, 3, 32, 32)
                 
     # final shape            
-    if params.useT2: print t2Data.shape, t2Label.shape    
-    print t1Data.shape
-    print t1Label.shape    
+    print 'T1 data shape: ', t1Data.shape, t1Label.shape    
+    if np.sum(np.isinf(t1Data)) > 0 : print 'Nan in T1 data!!'
+    if np.sum(np.isinf(t1Label)) > 0 : print 'Nan in T1 label!!'
+
+    if params.useT2: 
+        print 'T2 data shape: ', t2Data.shape, t2Label.shape
+        if np.sum(np.isinf(t2Data)) > 0 : print 'Nan in T2 data!!'
+        if np.sum(np.isinf(t2Label)) > 0 : print 'Nan in T2 label!!'
             
 #    show_samples(t1Data[:100]/255., 50)    
         
