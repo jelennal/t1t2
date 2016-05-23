@@ -61,7 +61,7 @@ def lr_schedule(fun, var, halfLife, start):
 
     Nothing = lambda t: 1.
     LinearVulgaris = lambda t: (1. - t)
-    OneLinear = lambda t: min(1, 1 - 3*(t-2./3))#(t - halfLife)/(1-halfLife)) 
+    OneLinear = lambda t: min(1, t/(0.86-1)-1/(0.86-1))#(t - halfLife)/(1-halfLife)) 
     ZeroLinear = lambda t: max(0, (t-start)/(1-start)) 
     Exponential = lambda t: math.pow(2,-t/halfLife)
     InverseT = lambda t: 1./(1.+t/halfLife)
