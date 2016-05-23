@@ -74,7 +74,7 @@ def setup(replace_params={}):
             # MODEL
             self.model = 'convnet'                                             # which model? 'mlp'/'convnet' TODO: more!
             self.dataset = 'cifar10'                                             # which dataset? 'mnist'/'svhn'/'cifar10' TODO: /'cfar100'/'not_mnist'
-            self.cnnType = 'all_conv'                                          #'defaulcd datast'/'all_conv'/''
+            self.cnnType = 'ladder_baseline'                                          #'defaulcd datast'/'all_conv'/''
             self.cnnNonlin = 'leaky_relu'
             # PREPROCESSING
             self.ratioT2 = 1.                                                  # how much of validation set goes to T2? [0-1]
@@ -93,6 +93,7 @@ def setup(replace_params={}):
             self.evaluateTestInterval = 25                                     # how often compute the "exact" BN parameters? i.e. replacing moving average with the estimate from the whole training data
             self.m = 550                                                       # when computing "exact" BN parameters, average over how many samples from training set?
             self.testBN = 'default'                                            # when computing "exact" BN parameters, how? 'default'/'proper'/'lazy'
+            self.poolBNafter = True
             # REGULARIZATION
             self.rglrzTrain = ['addNoise']                               # which rglrz are trained? (which are available? see: rglrzInitial)
             self.rglrz = ['addNoise']                                    # which rglrz are used? 
@@ -105,7 +106,7 @@ def setup(replace_params={}):
                          'LmaxCutoff': 0.*ones,                                # soft cutoff param1
                           'LmaxSlope': 0.*ones,                                # soft cutoff param2
                            'LmaxHard': 2.*ones,                                # hard cutoff aka maxnorm 
-                          'addNoise' : 0.*ones, 
+                          'addNoise' : 0.3*ones, 
                         'inputNoise' : [0.],                                   # only input noise (if trained, need be PerNetwork)
                             'dropOut': [0.2]+20*[0.5],
                            'dropOutB': [0.2]+20*[0.5]}                   # shared dropout pattern within batch
@@ -117,7 +118,7 @@ def setup(replace_params={}):
                    'inputNoise' : 1.}
             # REGULARIZATION: noise specific                
             self.noiseupSoftmax = False                                        # is there noise in the softmax layer?
-            self.noiseWhere = 'type0'                                          # where is noise added at input? 'type0' - after non-linearity, 'type1' - before non-linearity                 
+            self.noiseWhere = 'type1'                                          # where is noise added at input? 'type0' - after non-linearity, 'type1' - before non-linearity                 
             self.noiseT1 = 'None'                                              # type of gaussian noise? 'None'/'multi0'/'multi1'/'fake_drop' --> (x+n)/x*n/x*(n+1)/x*s(n) 
             # TRAINING: COST
             self.cost = 'categorical_crossentropy'                             # cost for T1? 'L2'/'categorical_crossentropy'
@@ -131,9 +132,9 @@ def setup(replace_params={}):
             self.T2gradDIY = False  # TODO                                     # use your own ROP operator                              
             self.T2onlySGN = False                                             # consider only the sign for T2 update, not the amount
             # TRAINING: OPTIMIZATION
-            self.learnRate1 = 0.001                                            # T1 max step size
+            self.learnRate1 = 0.002                                            # T1 max step size
             self.learnRate2 = 0.001                                            # T2 max step size
-            self.learnFun1 = 'lin'                                             # learning rate schedule for T1? (see LRFunctions for options)
+            self.learnFun1 = 'olin'                                             # learning rate schedule for T1? (see LRFunctions for options)
             self.learnFun2 = 'lin'                                            # learning rate schedule for T2? 
             self.opt1 = 'adam'                                                 # optimizer for T1? 'adam'/None (None is SGD)
             self.opt2 = 'adam'                                                 # optimizer for T2? 'adam'/None (None is SGD)
@@ -150,7 +151,7 @@ def setup(replace_params={}):
             # TRAINING: OTHER
             self.batchSize1 = 128
             self.batchSize2 = 128
-            self.maxEpoch = 200
+            self.maxEpoch = 70
             self.seed = 1234
             # TRACKING, PRINTING
             self.trackPerEpoch = 1                                             # how often within epoch track error?
