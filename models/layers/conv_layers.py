@@ -121,7 +121,7 @@ class pool_layer(object):
     def __init__(self, rstream, index, x, 
                 params, useRglrz, bnPhase,
                 poolShape, inFilters, outFilters, stride, ignore_border = False, 
-                b=None, a=None, normParam=None, rglrzParam=None):
+                b=None, a=None, normParam=None, normParam2=None, rglrzParam=None):
 
         ''' 
             Pooling layer + BN + noise 
@@ -168,13 +168,31 @@ class pool_layer(object):
                 drop = self.rglrzInitial['dropOutB'][index]
             x = dropout(x, useRglrz, drop, params, inFilters, rstream)
 
-
             
         #  pooling          
         if cudasConv:
             self.output = cudnn.dnn_pool(x, poolShape, stride = stride, mode = 'max')#, ignore_border = ignore_border)                                                                                                
         else:
-            self.output = pool.pool_2d(x, ds = poolShape, st = stride, ignore_border = ignore_border, mode = 'max')                                                                                                
+            self.output = pool.pool_2d(x, ds = poolShape, st = stride, ignore_border = ignore_border, mode = 'max')     
+
+        # batch normalization
+        if params.batchNorm and params.convLayers[index].bn and params.poolBNafter:                
+            _, b, a = t1_shared(params=params, rng=0, index=index+20, nIn=0, nOut=0, 
+                                outFilters=outFilters, filterShape=0, defineW=0) 
+
+            self.b = b; self.a = a     
+            if params.batchNorm and not params.aFix:
+                self.paramsT1 = [b, a]
+            else:    
+                self.paramsT1 = [b] 
+                                
+            if normParam2 is None: 
+                normParam2, paramsBN2 = bn_shared(params, outFilters, index+20)                                 
+            self.normParam2 = normParam2         
+            self.paramsBN += paramsBN2
+            self.output, updateBN2 = bn_layer(self.output, self.a, self.b, self.normParam2, params, bnPhase)
+            self.updateBN += updateBN2
+                                                                                           
             
                                                                                    
                                                                                    
