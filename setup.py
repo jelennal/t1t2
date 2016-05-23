@@ -17,35 +17,38 @@ def cnn_setup(params):
             self.noise = doNoise
             self.bn = doBN
             
-    cl1 = cnn_layer('conv', (3, 3), (3, 96),  (1, 1), 'full')
+    cl1 = cnn_layer('conv', (3, 3), (3, 96),  (1, 1), 'valid')
     cl2 = cnn_layer('conv', (3, 3), (96, 96), (1, 1), 'full')
-    cl3 = cnn_layer('pool', (3, 3), (96, 96), (2, 2), 'dummy', 1, 0) # dummy is not used
+    cl2alt = cnn_layer('conv', (3, 3), (96, 96), (1, 1), 'full')
+
+    cl3 = cnn_layer('pool', (2, 2), (96, 96), (2, 2), 'dummy', 1, 1) # dummy is not used
     cl3alt = cnn_layer('conv', (3, 3), (96, 96), (2, 2), 'valid') # ? stride = 2?    
     
-    cl4 = cnn_layer('conv', (3, 3), (96, 192),  (1, 1), 'full')
-    cl5 = cnn_layer('conv', (3, 3), (192, 192), (1, 1), 'full')
-    cl6 = cnn_layer('pool', (3, 3), (192, 192), (2, 2), 'dummy', 1, 0)
-    cl6alt = cnn_layer('conv', (3, 3), (192, 192), (2, 2),'valid') # ? stride = 2?    
- 
-    cl8  = cnn_layer('conv', (3, 3), (192, 192), (1, 1), 'full')
-    cl9  = cnn_layer('conv', (1, 1), (192, 192), (1, 1), 'full')
-    cl10 = cnn_layer('conv', (1, 1), (192, 10),  (1, 1), 'valid', 0, 0)
-    cl11 = cnn_layer('average+softmax', (6, 6), (10, 10), (6, 6), 'dummy', 0, 0)
     
+    cl4 = cnn_layer('conv', (3, 3), (96, 192),  (1, 1), 'valid')
+    cl5 = cnn_layer('conv', (3, 3), (192, 192), (1, 1), 'full')
+    cl6 = cnn_layer('conv', (3, 3), (192, 192), (1, 1), 'valid')
+
+    cl7 = cnn_layer('pool', (2, 2), (192, 192), (2, 2), 'dummy', 1, 1)
+    cl7alt = cnn_layer('conv', (3, 3), (192, 192), (2, 2),'valid') # ? stride = 2?    
+
+ 
+    cl8  = cnn_layer('conv', (3, 3), (192, 192), (1, 1), 'valid')
+    cl9  = cnn_layer('conv', (1, 1), (192, 192), (1, 1), 'valid')
+    cl10 = cnn_layer('conv', (1, 1), (192, 10),  (1, 1), 'valid', 0, 0)
+
+    cl11 = cnn_layer('average+softmax', (6, 6), (10, 10), (6, 6), 'dummy', 0, 0)    
     cl11alt = cnn_layer('average', (6, 6), (10, 10), (6, 6), 0, 0, 0)
     cl12alt = cnn_layer('softmax', (6, 6), (10, 10), (1, 1), 0, 0, 0)
     
     if params.dataset == 'mnist':
         cl1 = cnn_layer('conv', (3, 3), (1, 96), (1, 1))
-    if params.batchNorm:        
-        cnn_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl8, cl9, cl10, cl11]   
-    
-    else:
-        cnn_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl8, cl9, cl10, cl11]   
-#        cnn_layers = [cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8, cl9, cl10, cl11alt, cl12alt]   
     if params.cnnType == 'all_conv':
-        cnn_layers = [cl1, cl2, cl3alt, cl4, cl5, cl6alt, cl8, cl9, cl10, cl11]        
-    
+        cnn_layers = [cl1, cl2, cl3alt, cl4, cl5, cl7alt, cl8, cl9, cl10, cl11]
+    elif params.cnnType == 'ladder_baseline':
+        cnn_layers = [cl1, cl2, cl2alt, cl3, cl4, cl5, cl6, cl7, cl8, cl9, cl10, cl11]        
+    else:
+        cnn_layers = [cl1, cl2, cl3, cl4, cl5, cl7, cl8, cl9, cl10, cl11]       
         
     return cnn_layers
     
@@ -72,6 +75,7 @@ def setup(replace_params={}):
             self.model = 'convnet'                                             # which model? 'mlp'/'convnet' TODO: more!
             self.dataset = 'cifar10'                                             # which dataset? 'mnist'/'svhn'/'cifar10' TODO: /'cfar100'/'not_mnist'
             self.cnnType = 'all_conv'                                          #'defaulcd datast'/'all_conv'/''
+            self.cnnNonlin = 'leaky_relu'
             # PREPROCESSING
             self.ratioT2 = 1.                                                  # how much of validation set goes to T2? [0-1]
             self.ratioValid = 0.05                                             # how much of T2 goes to validatio set
