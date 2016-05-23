@@ -12,7 +12,7 @@ def relu(x):
     return output
 
 def leaky_relu(x):
-    output = T.maximum(0., x) + leaky_slope*T.minimum(0, x[1])
+    output = T.maximum(0., x) + leaky_slope*T.minimum(0, x)
     return output
 
     
