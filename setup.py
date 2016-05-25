@@ -77,13 +77,13 @@ def setup(replace_params={}):
             self.cnnType = 'ladder_baseline'                                          #'defaulcd datast'/'all_conv'/''
             self.cnnNonlin = 'leaky_relu'
             # PREPROCESSING
-            self.ratioT2 = 1.                                                  # how much of validation set goes to T2? [0-1]
+            self.ratioT2 = 0.5                                                  # how much of validation set goes to T1? [0-1]
             self.ratioValid = 0.05                                             # how much of T2 goes to validatio set
             self.preProcess = 'global_contrast_norm+zca'                           # what input preprocessing? 'None'/'m0'/'m0s1'/'minMax'/'pca'/'global_contrast_norm'/'zca'/'global_contrast_norm+zca'
             self.preContrast = 'None'                                          # nonlinear transform over input? 'None'/'tanh'/'arcsinh'/'sigmoid'
             # ARCHITECTURE
             self.nHidden = [784, 1000, 1000, 1000, 10]                         # how many hidden units in each layer?
-            self.activation = ['relu','relu', 'relu', 'softmax']               # what nonlinearities in each layer?                      
+            self.activation = ['relu','relu','relu','softmax']               # what nonlinearities in each layer?                      
             self.nLayers = len(self.nHidden)-1                                 # how many layers are there? 
             # BATCH NORMALIZATION                                               
             self.batchNorm = True                                              # use batch normalization?
@@ -93,7 +93,7 @@ def setup(replace_params={}):
             self.evaluateTestInterval = 25                                     # how often compute the "exact" BN parameters? i.e. replacing moving average with the estimate from the whole training data
             self.m = 550                                                       # when computing "exact" BN parameters, average over how many samples from training set?
             self.testBN = 'default'                                            # when computing "exact" BN parameters, how? 'default'/'proper'/'lazy'
-            self.poolBNafter = True
+            self.poolBNafter = False
             # REGULARIZATION
             self.rglrzTrain = ['addNoise']                               # which rglrz are trained? (which are available? see: rglrzInitial)
             self.rglrz = ['addNoise']                                    # which rglrz are used? 
@@ -135,7 +135,7 @@ def setup(replace_params={}):
             self.learnRate1 = 0.002                                            # T1 max step size
             self.learnRate2 = 0.001                                            # T2 max step size
             self.learnFun1 = 'olin'                                             # learning rate schedule for T1? (see LRFunctions for options)
-            self.learnFun2 = 'lin'                                            # learning rate schedule for T2? 
+            self.learnFun2 = 'None'                                            # learning rate schedule for T2? 
             self.opt1 = 'adam'                                                 # optimizer for T1? 'adam'/None (None is SGD)
             self.opt2 = 'adam'                                                 # optimizer for T2? 'adam'/None (None is SGD)
             self.use_momentum = False                                          # applies both to T1 and T2, set the terms to 0 for either if want to disable for one   
@@ -151,7 +151,7 @@ def setup(replace_params={}):
             # TRAINING: OTHER
             self.batchSize1 = 128
             self.batchSize2 = 128
-            self.maxEpoch = 70
+            self.maxEpoch = 100
             self.seed = 1234
             # TRACKING, PRINTING
             self.trackPerEpoch = 1                                             # how often within epoch track error?
