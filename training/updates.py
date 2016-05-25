@@ -7,6 +7,14 @@ from training.hypergrad import hypergrad
 from training.monitor import grad_monitor
 
 
+def remove_nans(x):
+    return T.switch(T.isnan(x) + T.isinf(x), 0, x)
+
+def scale_norm(x, threshold):
+    norm = T.sqrt(T.sum(x*x))
+    multiplier = T.switch(norm < threshold, 1, threshold / norm)
+    return x * multiplier
+
 def separateLR(params, sharedName, globalLR1, globalLR2):    
     ''' 
         Get learning rate from the name of the shared variable.    
@@ -118,6 +126,7 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2):
     '''
     for param, grad in zip(mlp.paramsT1, gradC1T1):                
 
+            grad = scale_norm(remove_nans(grad), threshold=3.)                
             ups, track, _ = update_fun(param, grad, 'T1',
                                        history, opt1, learnParams, params)
             updateT1 += ups
@@ -135,11 +144,12 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2):
         '''
             Save grads C2T1 for the T2 update:
         '''
-        for param, grad in zip(mlp.paramsT1, gradC2T1temp):                
-    
+        for param, grad in zip(mlp.paramsT1, gradC2T1temp):   
+
+                grad = scale_norm(remove_nans(grad), threshold=3.)                
                 saveGrad = theano.shared(np.asarray(param.get_value() * 0., dtype='float32'),
                                          broadcastable=param.broadcastable,
-                                         name='gradC2_%s' % param.name)
+                                         name='gradC2T1_%s' % param.name)
                 updateC2grad += [(saveGrad, grad)]                         
                 gradC2T1 += [saveGrad]
 
@@ -153,6 +163,7 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2):
                 tempUps = [] if opt3 is None else opt3.initial_updates()
         
                 newC2 = []
+                grad = scale_norm(remove_nans(grad), threshold=3.)                                
                 for param, grad in zip(mlp.paramsT1, gradC2T1):            
                     tempUp, _, newGrad = update_fun(param, T.reshape(grad, param.shape), 'T1', 
                                                     historyC2, opt3, learnParams, params)
@@ -169,6 +180,7 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2):
             if params.decayT2 > 0. and paramName not in ['L2', 'L1']:
                 grad += params.decayT2*param 
 
+            grad = scale_norm(remove_nans(grad), threshold=3.)                
             tempUp, track, _ = update_fun(param, T.reshape(grad, param.shape),'T2',
                                           {}, opt2, learnParams, params)
             updateT2 += tempUp
