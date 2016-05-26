@@ -10,10 +10,15 @@ from training.monitor import grad_monitor
 def remove_nans(x):
     return T.switch(T.isnan(x) + T.isinf(x), 0, x)
 
-def scale_norm(x, threshold):
+def scale_norm(x, threshold=3.):
     norm = T.sqrt(T.sum(x*x))
     multiplier = T.switch(norm < threshold, 1, threshold / norm)
     return x * multiplier
+
+def clip_grad(x, threshold=10.):
+    x = T.minimum(x, threshold)
+    return x
+
 
 def separateLR(params, sharedName, globalLR1, globalLR2):    
     ''' 
@@ -146,7 +151,8 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2):
         '''
         for param, grad in zip(mlp.paramsT1, gradC2T1temp):   
 
-                grad = scale_norm(remove_nans(grad), threshold=3.)                
+                grad = scale_norm(remove_nans(grad), threshold=3.)         
+                grad = clip_grad(grad, threshold=10.)                
                 saveGrad = theano.shared(np.asarray(param.get_value() * 0., dtype='float32'),
                                          broadcastable=param.broadcastable,
                                          name='gradC2T1_%s' % param.name)
@@ -164,6 +170,7 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2):
         
                 newC2 = []
                 grad = scale_norm(remove_nans(grad), threshold=3.)                                
+                grad = clip_grad(grad, threshold=10.)                
                 for param, grad in zip(mlp.paramsT1, gradC2T1):            
                     tempUp, _, newGrad = update_fun(param, T.reshape(grad, param.shape), 'T1', 
                                                     historyC2, opt3, learnParams, params)
@@ -180,7 +187,8 @@ def updates(mlp, params, globalLR1, globalLR2, momentParam1, momentParam2):
             if params.decayT2 > 0. and paramName not in ['L2', 'L1']:
                 grad += params.decayT2*param 
 
-            grad = scale_norm(remove_nans(grad), threshold=3.)                
+            grad = scale_norm(remove_nans(grad), threshold=3.) 
+            grad = clip_grad(grad, threshold=10.)                              
             tempUp, track, _ = update_fun(param, T.reshape(grad, param.shape),'T2',
                                           {}, opt2, learnParams, params)
             updateT2 += tempUp
