@@ -20,11 +20,16 @@ theano.config.floatX = 'float32'
 
 def detect_nan(i, node, fn):
     for output in fn.outputs:
-        if (not isinstance(output[0], np.random.RandomState) and
-                (np.isnan(output[0]).any() or np.isinf(output[0]).any()) and
-                not (hasattr(node, 'op') and isinstance(node.op, theano.sandbox.rng_mrg.GPU_mrg_uniform))):
+        if (not isinstance(output[0], np.random.RandomState) and 
+           not (hasattr(node, 'op') or isinstance(node.op, (theano.sandbox.rng_mrg.GPU_mrg_uniform, theano.sandbox.cuda.basic_ops.GpuAllocEmpty)))):
+            try:
+                has_nans = np.isnan(output[0]).any() or np.isinf(output[0]).any()
+            except TypeError:
+                has_nans = False
+            if not has_nans:
+                continue           
             print('*** NaN detected ***')
-            theano.printing.debugprint(node)
+            theano.printing.debugprint(node, depth=3)
             print(type(node), node.op, type(node.op))
             print('Inputs : %s' % [input[0] for input in fn.inputs])
             print'Input shape',  [input[0].shape for input in fn.inputs]
@@ -32,7 +37,7 @@ def detect_nan(i, node, fn):
             print'Output shape',  [output[0].shape for output in fn.outputs]
             print 'NaN # :', [np.sum(np.isnan(output[0])) for output in fn.outputs]  
             print 'Inf # :', [np.sum(np.isinf(output[0])) for output in fn.outputs]  
-            print 'NaN location: ', np.isnan(output[0]), ', Inf location: ', np.argwhere(np.isinf(output[0]))            
+            print 'NaN location: ', np.argwhere(np.isnan(output[0])), ', Inf location: ', np.argwhere(np.isinf(output[0]))            
             import pdb; pdb.set_trace()
             raise ValueError
 
@@ -100,30 +105,32 @@ def run_exp(replace_params={}):
 
     updateT1 = theano.function(
         inputs = [x, trueLabel, globalLR1, moment1, useRglrz, bnPhase],
-        outputs = [model.classError, model.guessLabel] + grads,
+        outputs = [model.trainCost, model.guessLabel] + grads,
         updates = updateT1 + updateBN,
+#        mode=theano.compile.MonitorMode(post_func=detect_nan),                
         on_unused_input='ignore',
         allow_input_downcast=True)
 
     updateT2part1 = theano.function(
         inputs = [x, trueLabel, globalLR1, moment1, useRglrz, bnPhase],
-        outputs = [model.classError, model.guessLabel] + grads,
+        outputs = [model.trainCost, model.guessLabel] + grads,
         updates = updateC2grad,
+#        mode=theano.compile.MonitorMode(post_func=detect_nan),                
         on_unused_input='ignore',
         allow_input_downcast=True)
 
     updateT2part2 = theano.function(
-        inputs = [x, trueLabel, globalLR2, moment2, useRglrz, bnPhase],
-        outputs = [model.classError, model.guessLabel] + grads,
+        inputs = [x, trueLabel, globalLR1, moment1, globalLR2, moment2, useRglrz, bnPhase],
+        outputs = [model.trainCost, model.guessLabel] + grads,
         updates = updateT2,
+#        mode=theano.compile.MonitorMode(post_func=detect_nan),                
         on_unused_input='ignore',
         allow_input_downcast=True)
 
     evaluate = theano.function(
         inputs = [x, trueLabel, useRglrz, bnPhase],
-        outputs = [model.classError, model.guessLabel, model.penalty, model.netStats],
+        outputs = [model.trainCost, model.guessLabel, model.penalty, model.netStats],
         on_unused_input='ignore',
-#        mode=theano.compile.MonitorMode(post_func=detect_nan),                
         allow_input_downcast=True)        
 
     evaluateBN = theano.function(
@@ -199,6 +206,7 @@ def run_exp(replace_params={}):
         Training!!!
         
     '''
+    lastUpdate = params.maxEpoch*nBatches1 - 1
 
     try:
         t_start = time() #
@@ -247,13 +255,14 @@ def run_exp(replace_params={}):
                    res = updateT2part1(t2Data[sampleIndex2], t2Label[sampleIndex2], lr1, moment1, 0, 1)                     
                    (c2, y2, debugs) = (res[0], res[1], res[2:])   
                    
-                   res = updateT2part2(t1Data[sampleIndex1], t1Label[sampleIndex1], lr2, moment2, 1, 0)  
+                   res = updateT2part2(t1Data[sampleIndex1], t1Label[sampleIndex1], lr1, moment1, lr2, moment2, 1, 0)  
                    (c1, y1, debugs) = (res[0], res[1], res[2:])   
  
                    tempError2 += [1.*sum(t2Label[sampleIndex2] != y2) / params.batchSize2]
                    tempCost2 += [c2]
                    currentT2Batch += 1                       
-                   if True in np.isnan(debugs): print 'NANS'
+                   if np.isnan(c1): print 'NANS in part 2!'
+                   if np.isnan(c2): print 'NANS in part 1!'
 
                 else:        
                    res = updateT1(t1Data[sampleIndex1], t1Label[sampleIndex1], lr1, moment1, 1, 0)                      
@@ -261,8 +270,8 @@ def run_exp(replace_params={}):
                 
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]                                   
                 tempCost1 += [c1]
-                if True in np.isnan(debugs): print 'NANS'
-            
+                if np.isnan(c1): print 'NANS!'
+                
             # Update T1 only 
             else: 
                 # make batch
@@ -274,18 +283,18 @@ def run_exp(replace_params={}):
              
                 tempError1 += [1.*sum(t1Label[sampleIndex1] != y1) / params.batchSize1]
                 tempCost1 += [c1]
-                if True in np.isnan(debugs) or True in np.isnan(y1): print 'NANS', c1
+                if np.isnan(c1): print 'NANS', c1
 
 
             '''
                 Evaluate test, store results, print status.
             '''
             if np.around(currentProgress % (1./params.trackPerEpoch), decimals=4) == 0 \
-                    or i == params.maxEpoch*nBatches1 - 1:
+                    or i == lastUpdate:
                                         
                 # batchnorm parameters: estimate for the final model
                 if (params.batchNorm and (currentEpoch > 1)) \
-                   and ((currentEpoch % params.evaluateTestInterval) == 0 or i == (params.maxEpoch*nBatches1 - 1)) \
+                   and ((currentEpoch % params.evaluateTestInterval) == 0 or i == lastUpdate) \
                    and params.testBN != 'lazy':
                        model = update_bn(model, params, evaluateBN, t1Data, t1Label)    
                      
@@ -305,7 +314,7 @@ def run_exp(replace_params={}):
                 if params.model == 'mlp': 
                     nTempSamples = 5000       
                 else:
-                    nTempSamples = 2000                           
+                    nTempSamples = 1000                           
                 tempError = 0.; tempCost = 0.; batchSizeT = nTestSamples / 10
                 if currentEpoch < 0.8*params.maxEpoch:
                     np.random.shuffle(testPerm)
@@ -334,8 +343,8 @@ def run_exp(replace_params={}):
                 #validError += [tempVError]
 
                 # RESET tracked errors
-                tempError1 = []
-                tempError2 = []
+                tempError1 = []; tempCost1 = []
+                tempError2 = []; tempCost2 = []
     
                 ''' 
                     TRACK: T2 parameter statistics & learning rates                
@@ -353,8 +362,8 @@ def run_exp(replace_params={}):
                     trackGrads = grad_extract(debugs, params, sharedNames, trackGrads)         
                         
                 # monitoring log learning rates        
-                trackLR1 += [np.log10(lr1)]
-                trackLR2 += [np.log10(lr2)]
+                trackLR1 += [lr1]
+                trackLR2 += [lr2]
     
                 ''' 
                     STATUS print               
