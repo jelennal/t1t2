@@ -16,7 +16,7 @@ def scale_norm(x, threshold=3.):
     return x * multiplier
 
 def clip_grad(x, threshold=10.):
-    x = T.minimum(x, threshold)
+    x = T.clip(x, -threshold, threshold)
     return x
 
 
