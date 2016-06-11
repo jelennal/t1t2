@@ -25,6 +25,7 @@ def cfg():
     batch_size = 128
     base_size = 32
     subset = 50000
+    preprocessed = True
     augment = True
 
     momentum = 0.9
@@ -41,21 +42,39 @@ def get_schedule(learning_rate, schedule):
 
 
 @ex.capture
-def prepare_dataset(subset):
-    # the data, shuffled and split between train and test sets
-    (X_train, y_train), (X_test, y_test) = cifar10.load_data()
+def prepare_dataset(preprocessed, subset):
+    if preprocessed:
+        print('Loading preprocessed dataset')
+        ds = np.load('preprocessed_cifar.npz')
+        X_train = ds['X_train']
+        y_train = ds['Y_train']
+        X_test = ds['X_test']
+        y_test = ds['Y_test']
+        X_train = X_train.astype('float32')
+        X_test = X_test.astype('float32')
+    else:
+        print('Using raw dataset')
+        # the data, shuffled and split between train and test sets
+        (X_train, y_train), (X_test, y_test) = cifar10.load_data()
+        X_train = X_train.astype('float32')
+        X_test = X_test.astype('float32')
+        X_train /= 255.
+        X_test /= 255.
+
+    # convert class vectors to binary class matrices
+    Y_train = np_utils.to_categorical(y_train, 10)
+    Y_test = np_utils.to_categorical(y_test, 10)
+
+    X_train = X_train[:subset]
+    Y_train = Y_train[:subset]
+
     print('X_train shape:', X_train.shape)
+    print('Y_train shape:', Y_train.shape)
+    print('X_test shape:', X_test.shape)
+    print('Y_test shape:', Y_test.shape)
     print(X_train.shape[0], 'train samples')
     print(X_test.shape[0], 'test samples')
 
-    X_train = X_train[:subset].astype('float32')
-    X_test = X_test.astype('float32')
-    X_train /= 255.
-    X_test /= 255.
-
-    # convert class vectors to binary class matrices
-    Y_train = np_utils.to_categorical(y_train[:subset], 10)
-    Y_test = np_utils.to_categorical(y_test, 10)
     return X_train, Y_train, X_test, Y_test
 
 
@@ -143,7 +162,6 @@ def run(batch_size, max_epochs, verbose, augment, _run):
         print('Using real-time data augmentation.')
         # this will do preprocessing and realtime data augmentation
         datagen = ImageDataGenerator(
-            zca_whitening=True,  # apply ZCA whitening
             width_shift_range=5./32, # randomly shift images horizontally (fraction of total width)
             height_shift_range=5./32, # randomly shift images vertically (fraction of total height)
             horizontal_flip=True)  # randomly flip images
