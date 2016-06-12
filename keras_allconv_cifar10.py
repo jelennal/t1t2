@@ -16,6 +16,7 @@ import numpy as np
 ex = Experiment('keras_allconv_cifar10')
 
 
+# noinspection PyUnusedLocal
 @ex.config
 def cfg():
     act_func = 'relu'
@@ -48,6 +49,10 @@ def prepare_dataset(preprocessed, subset):
         ds = np.load('preprocessed_cifar.npz')
         X_train = ds['X_train']
         y_train = ds['Y_train']
+        X_t2 = ds['X_t2']
+        y_t2 = ds['Y_t2']
+        X_train = np.concatenate((X_train, X_t2), axis=0)
+        y_train = np.concatenate((y_train, y_t2), axis=0)
         X_test = ds['X_test']
         y_test = ds['Y_test']
         X_train = X_train.astype('float32')
