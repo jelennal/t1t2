@@ -44,7 +44,7 @@ def get_schedule(learning_rate, schedule):
 
 @ex.capture
 def prepare_dataset(preprocessed, subset):
-    if preprocessed:
+    if preprocessed is True:
         print('Loading preprocessed dataset')
         ds = np.load('preprocessed_cifar.npz')
         X_train = ds['X_train']
@@ -57,6 +57,17 @@ def prepare_dataset(preprocessed, subset):
         y_test = ds['Y_test']
         X_train = X_train.astype('float32')
         X_test = X_test.astype('float32')
+    elif preprocessed == 'pylearn2':
+        print('Loading preprocessed dataset from pylearn2')
+        import pickle
+        with open('/home/greff/Datasets/pylearn2/cifar10/pylearn2_gcn_whitened/train.pkl', 'rb') as f:
+            train_ds = pickle.load(f)
+        with open('/home/greff/Datasets/pylearn2/cifar10/pylearn2_gcn_whitened/test.pkl', 'rb') as f:
+            test_ds = pickle.load(f)
+        X_test = test_ds.get_topological_view().transpose(0, 3, 1, 2)
+        y_test = test_ds.y
+        X_train = train_ds.get_topological_view().transpose(0, 3, 1, 2)
+        y_train = train_ds.y
     else:
         print('Using raw dataset')
         # the data, shuffled and split between train and test sets

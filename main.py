@@ -62,7 +62,17 @@ def run_exp(replace_params={}):
     
     # READ PARAMETERS AND DATA
     params = setup(replace_params)    
-    t1Data, t1Label, t2Data, t2Label, vData, vLabel, testD, testL = read_preprocess(params=params)    
+    t1Data, t1Label, t2Data, t2Label, vData, vLabel, testD, testL = read_preprocess(params=params)
+    np.savez('preprocessed_cifar.npz',
+             X_train=t1Data,
+             Y_train=t1Label,
+             X_t2=t2Data,
+             Y_t2=t2Label,
+             X_v=vData,
+             Y_v=vLabel,
+             X_test=testD,
+             Y_test=testL)
+    return
     
     # random numbers            
     rng = np.random.RandomState(params.seed)
