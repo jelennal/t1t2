@@ -20,6 +20,7 @@ ex = Experiment('keras_allconv_cifar10')
 @ex.config
 def cfg():
     act_func = 'relu'
+    init = 'glorot_uniform'  # 'he_normal'
     learning_rate = 0.25
     schedule = [0, 200, 250, 300]
     max_epochs = 350
@@ -28,6 +29,7 @@ def cfg():
     subset = 50000
     preprocessed = True
     augment = True
+    norm_std = False
 
     momentum = 0.9
     decay = 0.001
@@ -43,7 +45,7 @@ def get_schedule(learning_rate, schedule):
 
 
 @ex.capture
-def prepare_dataset(preprocessed, subset):
+def prepare_dataset(preprocessed, subset, norm_std):
     if preprocessed is True:
         print('Loading preprocessed dataset')
         ds = np.load('preprocessed_cifar.npz')
@@ -77,6 +79,11 @@ def prepare_dataset(preprocessed, subset):
         X_train /= 255.
         X_test /= 255.
 
+    if norm_std:
+        std = X_train.std()
+        X_train /= std
+        X_test /= std
+
     # convert class vectors to binary class matrices
     Y_train = np_utils.to_categorical(y_train, 10)
     Y_test = np_utils.to_categorical(y_test, 10)
@@ -95,38 +102,38 @@ def prepare_dataset(preprocessed, subset):
 
 
 @ex.capture
-def build_model(base_size, act_func, decay):
+def build_model(base_size, act_func, decay, init):
     model = Sequential()
 
     model.add(Dropout(0.2, input_shape=(3, 32, 32)))
     model.add(Convolution2D(base_size*3, 3, 3, border_mode='same',
-                            W_regularizer=l2(decay)))
+                            W_regularizer=l2(decay), init=init))
     model.add(Activation(act_func))
     model.add(Convolution2D(base_size*3, 3, 3, border_mode='same',
-                            W_regularizer=l2(decay)))
+                            W_regularizer=l2(decay), init=init))
     model.add(Activation(act_func))
     model.add(Convolution2D(base_size*3, 3, 3, border_mode='valid', subsample=(2, 2),
-                            W_regularizer=l2(decay)))
+                            W_regularizer=l2(decay), init=init))
     model.add(Dropout(0.5))
 
     model.add(Convolution2D(base_size*6, 3, 3, border_mode='same',
-                            W_regularizer=l2(decay)))
+                            W_regularizer=l2(decay), init=init))
     model.add(Activation(act_func))
     model.add(Convolution2D(base_size*6, 3, 3, border_mode='same',
-                            W_regularizer=l2(decay)))
+                            W_regularizer=l2(decay), init=init))
     model.add(Activation(act_func))
     model.add(Convolution2D(base_size*6, 3, 3, border_mode='valid', subsample=(2, 2),
-                            W_regularizer=l2(decay)))
+                            W_regularizer=l2(decay), init=init))
     model.add(Dropout(0.5))
 
     model.add(Convolution2D(base_size*6, 3, 3, border_mode='same',
-                            W_regularizer=l2(decay)))
+                            W_regularizer=l2(decay), init=init))
     model.add(Activation(act_func))
     model.add(Convolution2D(base_size*6, 1, 1, border_mode='valid',
-                            W_regularizer=l2(decay)))
+                            W_regularizer=l2(decay), init=init))
     model.add(Activation(act_func))
     model.add(Convolution2D(10, 1, 1, border_mode='valid',
-                            W_regularizer=l2(decay)))
+                            W_regularizer=l2(decay), init=init))
 
     model.add(AveragePooling2D(pool_size=(6, 6)))
     model.add(Flatten())
