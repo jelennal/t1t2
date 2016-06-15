@@ -36,12 +36,12 @@ def cfg():
     std = 0.3
     decay = 0.001
     eps = 1e-6
-    bn = "___B___B__"
-
+    spec = "C3NA C3NA C3NA MBN C6NA C6NA C6NA MBN C6NA c6NA"
 
     # Training
     max_epochs = 350
     batch_size = 128
+    sched_type = 'discreet'
     schedule = [0, 200, 250, 300]
     momentum = 0.9
     learning_rate = 0.001
@@ -49,10 +49,47 @@ def cfg():
     verbose = False
 
 
+@ex.named_config
+def ladder_baseline():
+    spec = "C3BNA C3BNA C3BNA MBN C6BNA C6BNA C6BNA MBN C6BNA c6BNA"
+    sched_type = 'linear'
+    schedule = [50, 100]
+    max_epochs= 100
+    use_adam = True
+    learning_rate = 0.002
+    std = 0.3
+    decay = 0.0
+    leak = 0.1
+    act_func = 'leakyrelu'
+
+
+@ex.named_config
+def allconv_c():
+    spec = "C3A C3A mD C6A C6A mD C6A c6A"
+    sched_type = 'discreet'
+    schedule = [0, 200, 250, 300]
+    max_epochs = 350
+    use_adam = False
+    learning_rate = 0.01
+    decay = 0.001
+    act_func = 'relu'
+
+
 @ex.capture
-def get_schedule(learning_rate, schedule):
-    def sched(epoch_nr):
-        return learning_rate * 0.1**(np.searchsorted(schedule, epoch_nr+1)-1)
+def get_schedule(learning_rate, schedule, sched_type):
+    if sched_type == 'discreet':
+        def sched(epoch_nr):
+            return learning_rate * 0.1**(np.searchsorted(schedule, epoch_nr+1)-1)
+    elif sched_type == 'linear':
+        assert len(schedule) == 2, schedule
+
+        def sched(epoch_nr):
+            if epoch_nr <= schedule[0]:
+                return learning_rate
+            else:
+                return learning_rate * (epoch_nr - schedule[0]) / (schedule[1] - schedule[0])
+    else:
+        raise KeyError('Unkown schedule type "{}"'.format(sched_type))
     return LearningRateScheduler(schedule=sched)
 
 
@@ -114,74 +151,63 @@ def prepare_dataset(preprocessed, subset, norm_std):
 
 
 @ex.capture
-def build_model(base_size, act_func, decay, init, std, eps, leak, bn):
-    def add_bn_noise(model, bn="B"):
-        if bn == 'B':
-            model.add(BatchNormalization(mode=1, epsilon=eps))  # TODO: fix gamma
-        model.add(GaussianNoise(sigma=std))
+def build_model_spec(spec, act_func, decay, init, std, eps, leak, base_size):
+    model = Sequential()
 
-    def add_act(model):
+    def add_act():
         if act_func == 'leakyrelu':
             model.add(LeakyReLU(alpha=leak))
         else:
             model.add(Activation(act_func))
 
-    model = Sequential()
-    # cl1 = cnn_layer('conv',    (3, 3), (3, 96),    (1, 1), 'valid')
-    model.add(Convolution2D(base_size*3, 3, 3, border_mode='valid',
-                            input_shape=(3, 32, 32), init=init, W_regularizer=l2(decay)))
-    add_bn_noise(model, bn[0])
-    add_act(model)
+    size = 3
+    for i, block in enumerate(spec.split()):
+        kwargs = {} if i else {'input_shape': (3, 32, 32)}
+        if block[0] == 'C':
+            size = base_size*int(block[1])
+            print('===> Conv 3x3 {}'.format(size))
+            model.add(Convolution2D(size, 3, 3, border_mode='same',
+                                    init=init, W_regularizer=l2(decay), **kwargs))
+            rest = block[2:]
+        elif block[0] == 'c':
+            size = base_size * int(block[1])
+            print('===> Conv 1x1 {}'.format(size))
+            model.add(Convolution2D(size, 1, 1, init=init, W_regularizer=l2(decay), **kwargs))
+            rest = block[2:]
+        elif block[0] == 'M':
+            print('===> MaxPool 2x2')
+            model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+            rest = block[1:]
+        elif block[0] == 'm':
+            print('===> Strided Convolution 3x3 with stride 2x2')
+            model.add(Convolution2D(size, 3, 3, init=init, W_regularizer=l2(decay), subsample=(2, 2), border_mode='valid'))
+            rest = block[1:]
+        else:
+            raise KeyError('Unknown type "{}"'.format(block[0]))
 
-    # cl2 = cnn_layer('conv',    (3, 3), (96, 96),   (1, 1), 'full')
-    model.add(Convolution2D(base_size*3, 3, 3, border_mode='same', init=init, W_regularizer=l2(decay)))
-    add_bn_noise(model, bn[1])
-    add_act(model)
+        for r in rest:
+            if r == 'B':
+                print('BatchNorm')
+                model.add(BatchNormalization(mode=1, epsilon=eps))
+            elif r == 'N':
+                print('GaussianNoise')
+                model.add(GaussianNoise(sigma=std))
+            elif r == 'A':
+                print('Activation: {}'.format(act_func))
+                add_act()
+            elif r == 'D':
+                print('Dropout (p=0.5)')
+                model.add(Dropout(0.5))
+            elif r == 'd':
+                model.add(Dropout(0.2))
 
-    # cl2alt = cnn_layer('conv', (3, 3), (96, 96),   (1, 1), 'full')
-    model.add(Convolution2D(base_size*3, 3, 3, border_mode='same', init=init, W_regularizer=l2(decay)))
-    add_bn_noise(model, bn[2])
-    add_act(model)
+        print(model.outputs[0]._keras_shape)
 
-    # cl3 = cnn_layer('pool',    (2, 2), (96, 96),   (2, 2), 'dummy', 1, 1)
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-    add_bn_noise(model, bn[3])
+    model.add(Convolution2D(10, 1, 1, border_mode='valid', init=init,
+                            W_regularizer=l2(decay)))
+    add_act()
 
-    # cl4 = cnn_layer('conv',    (3, 3), (96, 192),  (1, 1), 'valid')
-    model.add(Convolution2D(base_size*6, 3, 3, border_mode='valid', init=init, W_regularizer=l2(decay)))
-    add_bn_noise(model, bn[4])
-    add_act(model)
-
-    # cl5 = cnn_layer('conv',    (3, 3), (192, 192), (1, 1), 'full')
-    model.add(Convolution2D(base_size*6, 3, 3, border_mode='same', init=init, W_regularizer=l2(decay)))
-    add_bn_noise(model, bn[5])
-    add_act(model)
-
-    # cl6 = cnn_layer('conv',    (3, 3), (192, 192), (1, 1), 'valid')
-    model.add(Convolution2D(base_size*6, 3, 3, border_mode='same', init=init, W_regularizer=l2(decay)))
-    add_bn_noise(model, bn[6])
-    add_act(model)
-
-    # cl7 = cnn_layer('pool',    (2, 2), (192, 192), (2, 2), 'dummy', 1, 1)
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-    add_bn_noise(model, bn[7])
-
-    # cl8  = cnn_layer('conv',   (3, 3), (192, 192), (1, 1), 'valid')
-    model.add(Convolution2D(base_size*6, 3, 3, border_mode='same', init=init, W_regularizer=l2(decay)))
-    add_bn_noise(model, bn[8])
-    add_act(model)
-
-    # cl9  = cnn_layer('conv',   (1, 1), (192, 192), (1, 1), 'valid')
-    model.add(Convolution2D(base_size*6, 1, 1, border_mode='valid', init=init, W_regularizer=l2(decay)))
-    add_bn_noise(model, bn[9])
-    add_act(model)
-
-    # cl10 = cnn_layer('conv',   (1, 1), (192, 10),  (1, 1), 'valid', 0, 0)
-    model.add(Convolution2D(10, 1, 1, border_mode='valid', init=init, W_regularizer=l2(decay)))
-    add_act(model)
-
-    # cl11 = cnn_layer('average+softmax', (6, 6), (10, 10), (6, 6), 'dummy', 0, 0)
-    model.add(AveragePooling2D(pool_size=(6, 6)))
+    model.add(AveragePooling2D(pool_size=model.outputs[0]._keras_shape[2:]))
     model.add(Flatten())
     model.add(Activation('softmax'))
     return model
@@ -215,7 +241,7 @@ class InfoUpdater(Callback):
 @ex.automain
 def run(batch_size, max_epochs, verbose, augment, _run):
     X_train, Y_train, X_test, Y_test = prepare_dataset()
-    model = build_model()
+    model = build_model_spec()
     compile_model(model)
 
     if not augment:
