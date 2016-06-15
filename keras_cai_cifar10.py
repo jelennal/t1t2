@@ -87,7 +87,7 @@ def get_schedule(learning_rate, schedule, sched_type):
             if epoch_nr <= schedule[0]:
                 return learning_rate
             else:
-                return learning_rate * (epoch_nr - schedule[0]) / (schedule[1] - schedule[0])
+                return learning_rate * (1.0 - (epoch_nr - schedule[0]) / (schedule[1] - schedule[0]))
     else:
         raise KeyError('Unkown schedule type "{}"'.format(sched_type))
     return LearningRateScheduler(schedule=sched)
