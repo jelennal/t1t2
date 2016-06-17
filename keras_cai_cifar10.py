@@ -251,10 +251,6 @@ class InfoUpdater(Callback):
             self.run.info['logs'][k] = logout
 
 
-
-
-
-
 @ex.automain
 def run(batch_size, max_epochs, verbose, augment, tensorboard, _run):
     X_train, Y_train, X_test, Y_test = prepare_dataset()
