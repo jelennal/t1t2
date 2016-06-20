@@ -4,6 +4,7 @@ from __future__ import division, print_function, unicode_literals
 from keras.models import Sequential
 from keras.layers import Activation, Flatten, Dropout
 from keras.layers import Convolution2D, AveragePooling2D
+from keras.layers import GaussianDropout
 from keras.preprocessing.image import ImageDataGenerator
 from keras.regularizers import l2
 from keras.callbacks import LearningRateScheduler, Callback, BaseLogger
@@ -27,7 +28,7 @@ def cfg():
     batch_size = 128
     base_size = 32
     subset = 50000
-    preprocessed = True
+    preprocessed = 'pylearn2'
     augment = True
     norm_std = False
 
@@ -105,7 +106,7 @@ def prepare_dataset(preprocessed, subset, norm_std):
 def build_model(base_size, act_func, decay, init):
     model = Sequential()
 
-    model.add(Dropout(0.2, input_shape=(3, 32, 32)))
+    model.add(GaussianDropout(0.2, input_shape=(3, 32, 32)))
     model.add(Convolution2D(base_size*3, 3, 3, border_mode='same',
                             W_regularizer=l2(decay), init=init))
     model.add(Activation(act_func))
@@ -114,7 +115,7 @@ def build_model(base_size, act_func, decay, init):
     model.add(Activation(act_func))
     model.add(Convolution2D(base_size*3, 3, 3, border_mode='valid', subsample=(2, 2),
                             W_regularizer=l2(decay), init=init))
-    model.add(Dropout(0.5))
+    model.add(GaussianDropout(0.5))
 
     model.add(Convolution2D(base_size*6, 3, 3, border_mode='same',
                             W_regularizer=l2(decay), init=init))
@@ -124,7 +125,7 @@ def build_model(base_size, act_func, decay, init):
     model.add(Activation(act_func))
     model.add(Convolution2D(base_size*6, 3, 3, border_mode='valid', subsample=(2, 2),
                             W_regularizer=l2(decay), init=init))
-    model.add(Dropout(0.5))
+    model.add(GaussianDropout(0.5))
 
     model.add(Convolution2D(base_size*6, 3, 3, border_mode='same',
                             W_regularizer=l2(decay), init=init))
